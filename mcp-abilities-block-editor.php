@@ -1054,6 +1054,7 @@ function mcp_abilities_gutenberg_get_navigation_entities(): array {
 	foreach ( $posts as $post ) {
 		$content = (string) $post->post_content;
 		$blocks  = mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) );
+		$usage   = mcp_abilities_gutenberg_collect_block_usage( $blocks );
 		$items[] = array(
 			'id'          => (int) $post->ID,
 			'slug'        => (string) $post->post_name,
@@ -1061,7 +1062,7 @@ function mcp_abilities_gutenberg_get_navigation_entities(): array {
 			'status'      => (string) $post->post_status,
 			'modified'    => (string) $post->post_modified_gmt,
 			'block_count' => count( $blocks ),
-			'items'       => count( array_filter( $blocks, static fn( array $block ): bool => 'core/navigation-link' === (string) ( $block['block_name'] ?? '' ) || 'core/navigation-submenu' === (string) ( $block['block_name'] ?? '' ) ) ),
+			'items'       => (int) ( $usage['core/navigation-link'] ?? 0 ) + (int) ( $usage['core/navigation-submenu'] ?? 0 ),
 		);
 	}
 
