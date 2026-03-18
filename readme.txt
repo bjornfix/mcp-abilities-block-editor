@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.3.0
+Stable tag: 0.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,37 +23,49 @@ Included abilities:
 - `gutenberg/get-block-details`
 - `gutenberg/list-patterns`
 - `gutenberg/get-pattern`
+- `gutenberg/list-synced-patterns`
+- `gutenberg/get-synced-pattern`
 - `gutenberg/block-guidance`
 - `gutenberg/get-page-recipes`
 - `gutenberg/get-section-recipes`
 - `gutenberg/generate-landing-page`
 - `gutenberg/generate-section`
 - `gutenberg/validate-content`
+- `gutenberg/audit-content`
 - `gutenberg/analyze-content`
 - `gutenberg/parse-content`
 - `gutenberg/serialize-blocks`
 - `gutenberg/get-post-blocks`
 - `gutenberg/list-templates`
 - `gutenberg/get-template`
+- `gutenberg/create-template`
+- `gutenberg/update-template`
 - `gutenberg/list-template-parts`
 - `gutenberg/get-template-part`
+- `gutenberg/create-template-part`
+- `gutenberg/update-template-part`
 - `gutenberg/create-page-from-blocks`
+- `gutenberg/create-synced-pattern`
+- `gutenberg/update-synced-pattern`
 - `gutenberg/create-page-from-pattern`
 - `gutenberg/create-landing-page`
 - `gutenberg/insert-pattern-into-post`
+- `gutenberg/transform-blocks`
 - `gutenberg/update-post-blocks`
 
 This is useful when an MCP client needs to:
 
 - inspect the site block/theme/style context before authoring
 - inspect block metadata, categories, templates, and template parts
-- discover and reuse registered patterns
+- discover and reuse registered patterns and synced patterns
 - choose the right Gutenberg block for a content scenario
 - generate reusable sections like hero, FAQ, CTA, testimonial, and stats rows
 - generate a structured landing page from business inputs
-- validate round-trip safety, page structure, outline, and link/media usage
+- validate round-trip safety, page structure, outline, link/media usage, and Gutenberg-specific QA issues
 - inspect Gutenberg content as nested blocks
 - preserve block formatting and attributes
+- create and update block templates, template parts, and synced patterns
+- apply structural block transforms without dropping into raw HTML edits
 - update a page without breaking block comment syntax
 - round-trip edited blocks back into valid WordPress content
 - combine with the main plugin's generic `content/*` and `media/*` abilities for non-Gutenberg-specific media flows
@@ -98,3 +110,10 @@ Requires the Abilities API plugin.
 - Added block-template and template-part inspection abilities.
 - Added media library listing and featured-image assignment.
 - Hardened slug-safe page creation and nested-block validation.
+
+= 0.4.0 =
+- Added synced pattern (`wp_block`) listing, retrieval, creation, and updating.
+- Added writable `wp_template` and `wp_template_part` abilities.
+- Added Gutenberg-specific audit checks for heading structure, empty buttons, missing alt text, and spacer overuse.
+- Added block-tree transform helpers for group wrapping, insertion, replacement, and removal.
+- Kept generic media/content CRUD in the main plugin to avoid ability overlap.

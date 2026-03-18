@@ -11,24 +11,34 @@ WordPress block-editor abilities for MCP. This add-on makes Gutenberg content us
 - `gutenberg/get-block-details`
 - `gutenberg/list-patterns`
 - `gutenberg/get-pattern`
+- `gutenberg/list-synced-patterns`
+- `gutenberg/get-synced-pattern`
 - `gutenberg/block-guidance`
 - `gutenberg/get-page-recipes`
 - `gutenberg/get-section-recipes`
 - `gutenberg/generate-landing-page`
 - `gutenberg/generate-section`
 - `gutenberg/validate-content`
+- `gutenberg/audit-content`
 - `gutenberg/analyze-content`
 - `gutenberg/parse-content`
 - `gutenberg/serialize-blocks`
 - `gutenberg/get-post-blocks`
 - `gutenberg/list-templates`
 - `gutenberg/get-template`
+- `gutenberg/create-template`
+- `gutenberg/update-template`
 - `gutenberg/list-template-parts`
 - `gutenberg/get-template-part`
+- `gutenberg/create-template-part`
+- `gutenberg/update-template-part`
 - `gutenberg/create-page-from-blocks`
+- `gutenberg/create-synced-pattern`
+- `gutenberg/update-synced-pattern`
 - `gutenberg/create-page-from-pattern`
 - `gutenberg/create-landing-page`
 - `gutenberg/insert-pattern-into-post`
+- `gutenberg/transform-blocks`
 - `gutenberg/update-post-blocks`
 
 ## Why This Exists
@@ -59,9 +69,10 @@ This version also adds authoring helpers for real page builds: theme/style disco
 4. Use `gutenberg/get-page-recipes`, `gutenberg/get-section-recipes`, `gutenberg/generate-section`, or `gutenberg/generate-landing-page` to draft content.
 5. Use `gutenberg/validate-content` and `gutenberg/analyze-content` to catch weak structure, missing hierarchy, link/media issues, and round-trip problems.
 6. Use `gutenberg/create-page-from-blocks`, `gutenberg/create-page-from-pattern`, or `gutenberg/create-landing-page` to create the page.
-7. Use `gutenberg/list-templates`, `gutenberg/get-template`, `gutenberg/list-template-parts`, and `gutenberg/get-template-part` when the active block theme matters.
+7. Use `gutenberg/list-templates`, `gutenberg/get-template`, `gutenberg/create-template`, `gutenberg/update-template`, `gutenberg/list-template-parts`, and `gutenberg/get-template-part` when the active block theme matters.
 8. Use the main plugin's generic media abilities for uploads, media lookup, and featured-image updates.
-9. Use `gutenberg/get-post-blocks`, `gutenberg/insert-pattern-into-post`, and `gutenberg/update-post-blocks` to iterate safely.
+9. Use `gutenberg/list-synced-patterns`, `gutenberg/get-synced-pattern`, `gutenberg/create-synced-pattern`, and `gutenberg/update-synced-pattern` for reusable block content.
+10. Use `gutenberg/get-post-blocks`, `gutenberg/insert-pattern-into-post`, `gutenberg/transform-blocks`, and `gutenberg/update-post-blocks` to iterate safely.
 
 ## Which Block To Use
 
@@ -111,12 +122,14 @@ The plugin exposes blocks in a normalized shape:
 - `gutenberg/generate-landing-page` intentionally uses core blocks and conservative theme-compatible markup.
 - `gutenberg/create-page-from-pattern` and `gutenberg/insert-pattern-into-post` expose pattern content as a writable workflow, not just discovery.
 - `gutenberg/analyze-content` adds outline, link, media-reference, and block-usage analysis on top of basic validation.
+- `gutenberg/audit-content` adds Gutenberg-specific QA for heading structure, empty buttons, missing alt text, and oversized spacers.
+- Synced patterns (`wp_block`) and block-theme template entities are now writable from the plugin.
 - Generic media management stays in the main plugin to avoid overlapping `content/*` and `media/*` abilities.
-- This version still does not handle media upload itself, advanced block transforms/migrations, or deep theme-intelligence beyond the currently active block/theme registries.
+- This version still does not handle media upload itself, deep block migrations/deprecations, or theme-intelligence beyond the currently active block/theme registries.
 
 ## Current Gaps
 
 - Media upload and attachment-creation flows are still outside the plugin.
 - Pattern insertion currently works at the whole-pattern level, not block-by-block merge granularity.
 - Section generation covers common marketing sections, but not the full long-tail of pricing, team, map, timeline, or interactive layouts yet.
-- Template inspection is read-only in this version; template writing and synchronization are not exposed.
+- Transform support currently handles top-level structural edits only, not deep targeted mutations inside arbitrary nested trees.
