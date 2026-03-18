@@ -533,15 +533,17 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 		}
 	}
 
+	$all_block_names = mcp_abilities_gutenberg_collect_block_names( $normalized );
+
 	$warnings = array();
 	if ( empty( $normalized ) ) {
 		$warnings[] = 'Content contains no Gutenberg blocks.';
 	}
-	if ( ! in_array( 'core/heading', $top_level_names, true ) ) {
-		$warnings[] = 'No top-level heading block found.';
+	if ( ! in_array( 'core/heading', $all_block_names, true ) ) {
+		$warnings[] = 'No heading block found anywhere in the block tree.';
 	}
-	if ( ! in_array( 'core/buttons', $top_level_names, true ) ) {
-		$warnings[] = 'No top-level buttons block found.';
+	if ( ! in_array( 'core/buttons', $all_block_names, true ) ) {
+		$warnings[] = 'No buttons block found anywhere in the block tree.';
 	}
 	if ( count( $normalized ) < 3 ) {
 		$warnings[] = 'Very few top-level blocks; page structure may be too shallow for a landing page.';
@@ -550,10 +552,60 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	return array(
 		'summary'                 => mcp_abilities_gutenberg_content_summary( $content ),
 		'roundtrip_equal'         => $normalized === $roundtrip_normalized,
+		'all_block_names'         => $all_block_names,
 		'top_level_block_names'   => $top_level_names,
 		'top_level_block_count'   => count( $normalized ),
 		'warnings'                => $warnings,
 	);
+}
+
+/**
+ * Collect block names from a normalized block tree.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ * @return array<int,string>
+ */
+function mcp_abilities_gutenberg_collect_block_names( array $blocks ): array {
+	$names = array();
+
+	foreach ( $blocks as $block ) {
+		$name = isset( $block['block_name'] ) ? (string) $block['block_name'] : '';
+		if ( '' !== $name ) {
+			$names[] = $name;
+		}
+
+		if ( ! empty( $block['inner_blocks'] ) && is_array( $block['inner_blocks'] ) ) {
+			$names = array_merge( $names, mcp_abilities_gutenberg_collect_block_names( $block['inner_blocks'] ) );
+		}
+	}
+
+	return array_values( array_unique( $names ) );
+}
+
+/**
+ * Find a page with an exact slug match.
+ *
+ * @param string $slug Page slug.
+ * @return WP_Post|null
+ */
+function mcp_abilities_gutenberg_find_page_by_slug( string $slug ) {
+	$posts = get_posts(
+		array(
+			'post_type'              => 'page',
+			'name'                   => $slug,
+			'post_status'            => array( 'publish', 'draft', 'pending', 'private', 'future' ),
+			'posts_per_page'         => 1,
+			'orderby'                => 'ID',
+			'order'                  => 'ASC',
+			'suppress_filters'       => true,
+			'ignore_sticky_posts'    => true,
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		)
+	);
+
+	return ! empty( $posts ) && $posts[0] instanceof WP_Post ? $posts[0] : null;
 }
 
 /**
@@ -813,13 +865,62 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 	$title = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : 'Untitled Page';
 	$slug  = isset( $input['slug'] ) ? sanitize_title( (string) $input['slug'] ) : sanitize_title( $title );
 	$status = isset( $input['status'] ) ? sanitize_text_field( (string) $input['status'] ) : 'draft';
+	$upsert_matching_slug = ! empty( $input['upsert_matching_slug'] );
+
+	if ( '' === $slug ) {
+		$slug = sanitize_title( $title );
+	}
+
+	$existing_post = '' !== $slug ? mcp_abilities_gutenberg_find_page_by_slug( $slug ) : null;
+	if ( $upsert_matching_slug && $existing_post instanceof WP_Post ) {
+		$update_result = wp_update_post(
+			wp_slash(
+				array(
+					'ID'           => (int) $existing_post->ID,
+					'post_title'   => $title,
+					'post_status'  => $status,
+					'post_content' => $content,
+				)
+			),
+			true
+		);
+
+		if ( is_wp_error( $update_result ) ) {
+			return array(
+				'success' => false,
+				'message' => $update_result->get_error_message(),
+			);
+		}
+
+		$post = get_post( (int) $existing_post->ID );
+
+		return array(
+			'success' => true,
+			'message' => 'Existing page updated successfully.',
+			'post'    => array(
+				'id'       => (int) $existing_post->ID,
+				'type'     => $post ? (string) $post->post_type : 'page',
+				'status'   => $post ? (string) $post->post_status : $status,
+				'slug'     => $post ? (string) $post->post_name : $slug,
+				'title'    => $post ? get_the_title( $post ) : $title,
+				'url'      => get_permalink( (int) $existing_post->ID ),
+				'modified' => $post ? (string) $post->post_modified_gmt : '',
+			),
+			'content' => $content,
+			'summary' => mcp_abilities_gutenberg_content_summary( $content ),
+			'blocks'  => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) ),
+		);
+	}
+
+	$parent_id   = 0;
+	$unique_slug = wp_unique_post_slug( $slug, 0, $status, 'page', $parent_id );
 
 	$post_id = wp_insert_post(
 		wp_slash(
 			array(
 				'post_type'    => 'page',
 				'post_title'   => $title,
-				'post_name'    => $slug,
+				'post_name'    => $unique_slug,
 				'post_status'  => $status,
 				'post_content' => $content,
 			)
@@ -843,7 +944,7 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 			'id'       => (int) $post_id,
 			'type'     => $post ? (string) $post->post_type : 'page',
 			'status'   => $post ? (string) $post->post_status : $status,
-			'slug'     => $post ? (string) $post->post_name : $slug,
+			'slug'     => $post ? (string) $post->post_name : $unique_slug,
 			'title'    => $post ? get_the_title( $post ) : $title,
 			'url'      => get_permalink( (int) $post_id ),
 			'modified' => $post ? (string) $post->post_modified_gmt : '',
@@ -1459,6 +1560,10 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'type'        => 'string',
 						'description' => 'Optional page slug.',
 					),
+					'upsert_matching_slug' => array(
+						'type'        => 'boolean',
+						'description' => 'Update the earliest existing page with the same slug instead of creating a duplicate page.',
+					),
 					'status' => array(
 						'type'        => 'string',
 						'description' => 'Page status.',
@@ -1531,6 +1636,10 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'type'        => 'string',
 						'description' => 'Optional page slug.',
 					),
+					'upsert_matching_slug' => array(
+						'type'        => 'boolean',
+						'description' => 'Update the earliest existing page with the same slug instead of creating a duplicate page.',
+					),
 					'status' => array(
 						'type'        => 'string',
 						'description' => 'Page status.',
@@ -1568,10 +1677,11 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				$payload = mcp_abilities_gutenberg_generate_landing_page_payload( is_array( $input ) ? $input : array() );
 				$create  = mcp_abilities_gutenberg_create_page_from_input(
 					array(
-						'title'   => $payload['title'],
-						'slug'    => $payload['slug'],
-						'status'  => isset( $input['status'] ) ? (string) $input['status'] : 'draft',
-						'content' => $payload['content'],
+						'title'                => $payload['title'],
+						'slug'                 => $payload['slug'],
+						'status'               => isset( $input['status'] ) ? (string) $input['status'] : 'draft',
+						'content'              => $payload['content'],
+						'upsert_matching_slug' => ! empty( $input['upsert_matching_slug'] ),
 					)
 				);
 
