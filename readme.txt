@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.8.0
+Stable tag: 0.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -54,6 +54,7 @@ Included abilities:
 - `gutenberg/create-navigation`
 - `gutenberg/update-navigation`
 - `gutenberg/find-navigation-usage`
+- `gutenberg/find-template-part-usage`
 - `gutenberg/create-page-from-blocks`
 - `gutenberg/create-synced-pattern`
 - `gutenberg/update-synced-pattern`
@@ -80,6 +81,7 @@ This is useful when an MCP client needs to:
 - inspect block metadata, categories, templates, and template parts
 - inspect site-editor navigation entities and theme/site-editor summary data
 - inspect template, template-part, and navigation reference relationships
+- find reverse usage for template parts before editing shared site-editor pieces
 - inspect block style variations and style-relevant theme support
 - discover and reuse registered patterns and synced patterns
 - choose the right Gutenberg block for a content scenario
@@ -167,3 +169,7 @@ Requires the Abilities API plugin.
 - Added site-editor reference graph inspection for templates and template parts.
 - Added navigation-usage lookup so Gutenberg navigation references can be traced across site-editor entities.
 - Kept the new reference analysis Gutenberg-specific and tied to block-theme/site-editor workflows.
+
+= 0.9.0 =
+- Added reverse usage lookup for template parts.
+- Extended site-editor relationship tooling so shared template parts can be traced before editing.

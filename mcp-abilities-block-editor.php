@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.8.0
+ * Version: 0.9.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -1358,6 +1358,67 @@ function mcp_abilities_gutenberg_find_navigation_usage( array $input ) {
 		'navigation' => $navigation,
 		'matches'    => $matches,
 		'match_count'=> count( $matches ),
+	);
+}
+
+/**
+ * Find template-part usage across templates and template parts.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_find_template_part_usage( array $input ) {
+	$graph      = mcp_abilities_gutenberg_get_site_editor_reference_graph();
+	$references = is_array( $graph['references'] ?? null ) ? $graph['references'] : array();
+	$template_part = null;
+
+	if ( isset( $input['post_id'] ) ) {
+		$template_part = mcp_abilities_gutenberg_get_template_entity(
+			'wp_template_part',
+			array(
+				'post_id' => (int) $input['post_id'],
+			)
+		);
+	} elseif ( isset( $input['slug'] ) ) {
+		$template_part = mcp_abilities_gutenberg_get_template_entity(
+			'wp_template_part',
+			array(
+				'slug' => (string) $input['slug'],
+			)
+		);
+	}
+
+	if ( is_wp_error( $template_part ) ) {
+		return $template_part;
+	}
+
+	$target_slug  = is_array( $template_part ) ? (string) ( $template_part['slug'] ?? '' ) : '';
+	$target_theme = is_array( $template_part ) ? (string) ( $template_part['theme'] ?? '' ) : '';
+
+	$matches = array_values(
+		array_filter(
+			$references,
+			static function ( array $reference ) use ( $target_slug, $target_theme ): bool {
+				if ( 'template_part' !== (string) ( $reference['kind'] ?? '' ) ) {
+					return false;
+				}
+
+				$ref_slug  = isset( $reference['target_slug'] ) ? (string) $reference['target_slug'] : '';
+				$ref_theme = isset( $reference['target_theme'] ) ? (string) $reference['target_theme'] : '';
+
+				if ( '' === $target_slug || $ref_slug !== $target_slug ) {
+					return false;
+				}
+
+				return '' === $target_theme || '' === $ref_theme || $ref_theme === $target_theme;
+			}
+		)
+	);
+
+	return array(
+		'template_part' => $template_part,
+		'matches'       => $matches,
+		'match_count'   => count( $matches ),
 	);
 }
 
@@ -5202,6 +5263,59 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				$usage = mcp_abilities_gutenberg_find_navigation_usage( is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $usage ) ) {
+					return array(
+						'success' => false,
+						'message' => $usage->get_error_message(),
+					);
+				}
+
+				return array(
+					'success' => true,
+					'usage'   => $usage,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/find-template-part-usage',
+		array(
+			'label'               => 'Find Template Part Usage',
+			'description'         => 'Find which templates or template parts reference a target template part.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Template part post ID.',
+					),
+					'slug' => array(
+						'type'        => 'string',
+						'description' => 'Template part slug.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'usage'   => array( 'type' => 'object' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$usage = mcp_abilities_gutenberg_find_template_part_usage( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $usage ) ) {
 					return array(
 						'success' => false,
