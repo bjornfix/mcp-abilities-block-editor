@@ -181,6 +181,41 @@ function mcp_abilities_gutenberg_denormalize_block( array $block ): array {
 		$inner_content[] = is_null( $item ) ? null : (string) $item;
 	}
 
+	if ( ! empty( $inner_blocks ) ) {
+		$null_count = 0;
+		foreach ( $inner_content as $item ) {
+			if ( null === $item ) {
+				$null_count++;
+			}
+		}
+
+		if ( $null_count !== count( $inner_blocks ) ) {
+			$wrappers = array_values(
+				array_filter(
+					$inner_content,
+					static function ( $item ): bool {
+						return is_string( $item ) && '' !== $item;
+					}
+				)
+			);
+
+			if ( count( $wrappers ) >= 2 ) {
+				$inner_content = array_merge(
+					array( (string) $wrappers[0] ),
+					array_fill( 0, count( $inner_blocks ), null ),
+					array( (string) $wrappers[ count( $wrappers ) - 1 ] )
+				);
+			} elseif ( 1 === count( $wrappers ) ) {
+				$inner_content = array_merge(
+					array( (string) $wrappers[0] ),
+					array_fill( 0, count( $inner_blocks ), null )
+				);
+			} else {
+				$inner_content = array_fill( 0, count( $inner_blocks ), null );
+			}
+		}
+	}
+
 	return array(
 		'blockName'    => '' !== $block_name ? $block_name : null,
 		'attrs'        => $attrs,
