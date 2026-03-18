@@ -4,10 +4,19 @@ WordPress block-editor abilities for MCP. This add-on makes Gutenberg content us
 
 ## What It Adds
 
+- `gutenberg/get-theme-context`
+- `gutenberg/get-style-guide`
+- `gutenberg/list-available-blocks`
+- `gutenberg/list-patterns`
 - `gutenberg/block-guidance`
+- `gutenberg/get-page-recipes`
+- `gutenberg/generate-landing-page`
+- `gutenberg/validate-content`
 - `gutenberg/parse-content`
 - `gutenberg/serialize-blocks`
 - `gutenberg/get-post-blocks`
+- `gutenberg/create-page-from-blocks`
+- `gutenberg/create-landing-page`
 - `gutenberg/update-post-blocks`
 
 ## Why This Exists
@@ -22,6 +31,7 @@ This plugin provides a round-trip workflow:
 4. Write it back to the post safely.
 
 It also provides block-choice guidance so an MCP client can pick the right block for the content instead of faking layout with paragraphs and ad hoc HTML.
+This version also adds authoring helpers for real page builds: theme/style discovery, available-block discovery, pattern listing, page recipes, landing-page generation, content validation, and one-step page creation.
 
 ## Requirements
 
@@ -32,10 +42,12 @@ It also provides block-choice guidance so an MCP client can pick the right block
 ## Suggested Workflow
 
 1. Use `gutenberg/block-guidance` when the MCP client needs to decide which block fits a scenario.
-2. Use `gutenberg/get-post-blocks` to load a page or post.
-3. Modify the returned `blocks` tree.
-4. Use `gutenberg/serialize-blocks` if you want to verify the generated content first.
-5. Use `gutenberg/update-post-blocks` to save the updated block content.
+2. Use `gutenberg/list-available-blocks` and `gutenberg/list-patterns` to understand the site context.
+3. Use `gutenberg/get-page-recipes` or `gutenberg/generate-landing-page` to draft a structure.
+4. Use `gutenberg/validate-content` to catch weak structure or round-trip problems.
+5. Use `gutenberg/create-page-from-blocks` or `gutenberg/create-landing-page` to create the page.
+6. Use `gutenberg/get-post-blocks` to inspect the saved result.
+7. Use `gutenberg/update-post-blocks` to iterate safely.
 
 ## Which Block To Use
 
@@ -82,4 +94,5 @@ The plugin exposes blocks in a normalized shape:
 - The write ability requires edit access to the target post.
 - `update-post-blocks` can save either `content` directly or serialize `blocks`.
 - `gutenberg/block-guidance` returns machine-readable recommendations for common scenarios.
-- This first version focuses on safe block parsing, round-tripping, and block choice guidance, not Markdown conversion or template generation.
+- `gutenberg/generate-landing-page` intentionally uses core blocks and conservative theme-compatible markup.
+- This version focuses on safe block parsing, round-tripping, guidance, recipes, validation, and page generation. It still does not handle Markdown conversion, media upload orchestration, or custom-theme layout intelligence.
