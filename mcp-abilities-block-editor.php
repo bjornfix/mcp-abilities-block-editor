@@ -312,27 +312,25 @@ function mcp_abilities_gutenberg_is_editor_only_attr_path( string $path ): bool 
 }
 
 /**
- * Check whether a registered block type is dynamic.
+ * Determine whether a normalized block persists saved markup.
  *
- * @param string $block_name Block name.
+ * @param array<string,mixed> $block Normalized block.
  * @return bool
  */
-function mcp_abilities_gutenberg_is_dynamic_block_type( string $block_name ): bool {
-	if ( '' === $block_name || ! class_exists( 'WP_Block_Type_Registry' ) ) {
-		return false;
+function mcp_abilities_gutenberg_block_persists_markup( array $block ): bool {
+	$inner_html = isset( $block['inner_html'] ) ? trim( (string) $block['inner_html'] ) : '';
+	if ( '' !== $inner_html ) {
+		return true;
 	}
 
-	$registry   = WP_Block_Type_Registry::get_instance();
-	$block_type = $registry->is_registered( $block_name ) ? $registry->get_registered( $block_name ) : null;
-	if ( ! $block_type ) {
-		return false;
+	$inner_content = isset( $block['inner_content'] ) && is_array( $block['inner_content'] ) ? $block['inner_content'] : array();
+	foreach ( $inner_content as $chunk ) {
+		if ( is_string( $chunk ) && '' !== trim( $chunk ) ) {
+			return true;
+		}
 	}
 
-	if ( method_exists( $block_type, 'is_dynamic' ) ) {
-		return (bool) $block_type->is_dynamic();
-	}
-
-	return is_callable( $block_type->render_callback ?? null );
+	return false;
 }
 
 /**
@@ -350,7 +348,7 @@ function mcp_abilities_gutenberg_get_static_render_risks_for_block( array $befor
 		return array();
 	}
 
-	if ( mcp_abilities_gutenberg_is_dynamic_block_type( $after_name ) ) {
+	if ( ! mcp_abilities_gutenberg_block_persists_markup( $before ) && ! mcp_abilities_gutenberg_block_persists_markup( $after ) ) {
 		return array();
 	}
 
@@ -3579,17 +3577,32 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	}
 
 	$all_block_names = mcp_abilities_gutenberg_collect_block_names( $normalized );
-	$static_block_names = array();
-	$dynamic_block_names = array();
-	foreach ( $all_block_names as $block_name ) {
-		if ( mcp_abilities_gutenberg_is_dynamic_block_type( $block_name ) ) {
-			$dynamic_block_names[] = $block_name;
-		} else {
-			$static_block_names[] = $block_name;
+	$markup_bearing_block_names = array();
+	$comment_only_block_names   = array();
+	$walk_blocks                = static function ( array $blocks ) use ( &$walk_blocks, &$markup_bearing_block_names, &$comment_only_block_names ): void {
+		foreach ( $blocks as $block ) {
+			if ( ! is_array( $block ) ) {
+				continue;
+			}
+
+			$block_name = isset( $block['block_name'] ) ? (string) $block['block_name'] : '';
+			if ( '' !== $block_name ) {
+				if ( mcp_abilities_gutenberg_block_persists_markup( $block ) ) {
+					$markup_bearing_block_names[] = $block_name;
+				} else {
+					$comment_only_block_names[] = $block_name;
+				}
+			}
+
+			$inner_blocks = isset( $block['inner_blocks'] ) && is_array( $block['inner_blocks'] ) ? $block['inner_blocks'] : array();
+			if ( ! empty( $inner_blocks ) ) {
+				$walk_blocks( $inner_blocks );
+			}
 		}
-	}
-	$static_block_names  = array_values( array_unique( $static_block_names ) );
-	$dynamic_block_names = array_values( array_unique( $dynamic_block_names ) );
+	};
+	$walk_blocks( $normalized );
+	$markup_bearing_block_names = array_values( array_unique( $markup_bearing_block_names ) );
+	$comment_only_block_names   = array_values( array_unique( $comment_only_block_names ) );
 
 	$warnings = array();
 	if ( empty( $normalized ) ) {
@@ -3604,21 +3617,21 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	if ( count( $normalized ) < 3 ) {
 		$warnings[] = 'Very few top-level blocks; page structure may be too shallow for a landing page.';
 	}
-	if ( ! empty( $static_block_names ) ) {
-		$warnings[] = 'Static blocks are present; attr-only mutations may require saved markup regeneration to affect frontend rendering.';
+	if ( ! empty( $markup_bearing_block_names ) ) {
+		$warnings[] = 'Markup-bearing blocks are present; attr-only mutations may require saved markup regeneration to affect frontend rendering.';
 	}
 
 	return array(
 		'summary'                 => mcp_abilities_gutenberg_content_summary( $content ),
 		'roundtrip_equal'         => $normalized === $roundtrip_normalized,
 		'all_block_names'         => $all_block_names,
-		'static_block_names'      => $static_block_names,
-		'dynamic_block_names'     => $dynamic_block_names,
+		'static_block_names'      => $markup_bearing_block_names,
+		'dynamic_block_names'     => $comment_only_block_names,
 		'top_level_block_names'   => $top_level_names,
 		'top_level_block_count'   => count( $normalized ),
 		'warnings'                => $warnings,
 		'mutation_guardrails'     => array(
-			'static_attr_changes_require_markup_regeneration' => ! empty( $static_block_names ),
+			'static_attr_changes_require_markup_regeneration' => ! empty( $markup_bearing_block_names ),
 			'editor_only_attr_paths'                          => array( 'lock', 'templateLock', 'allowedBlocks', 'metadata' ),
 		),
 	);
