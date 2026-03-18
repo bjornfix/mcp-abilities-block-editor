@@ -7,16 +7,30 @@ WordPress block-editor abilities for MCP. This add-on makes Gutenberg content us
 - `gutenberg/get-theme-context`
 - `gutenberg/get-style-guide`
 - `gutenberg/list-available-blocks`
+- `gutenberg/get-block-categories`
+- `gutenberg/get-block-details`
 - `gutenberg/list-patterns`
+- `gutenberg/get-pattern`
 - `gutenberg/block-guidance`
 - `gutenberg/get-page-recipes`
+- `gutenberg/get-section-recipes`
 - `gutenberg/generate-landing-page`
+- `gutenberg/generate-section`
 - `gutenberg/validate-content`
+- `gutenberg/analyze-content`
 - `gutenberg/parse-content`
 - `gutenberg/serialize-blocks`
 - `gutenberg/get-post-blocks`
+- `gutenberg/list-templates`
+- `gutenberg/get-template`
+- `gutenberg/list-template-parts`
+- `gutenberg/get-template-part`
+- `gutenberg/list-media`
+- `gutenberg/set-post-featured-media`
 - `gutenberg/create-page-from-blocks`
+- `gutenberg/create-page-from-pattern`
 - `gutenberg/create-landing-page`
+- `gutenberg/insert-pattern-into-post`
 - `gutenberg/update-post-blocks`
 
 ## Why This Exists
@@ -31,7 +45,7 @@ This plugin provides a round-trip workflow:
 4. Write it back to the post safely.
 
 It also provides block-choice guidance so an MCP client can pick the right block for the content instead of faking layout with paragraphs and ad hoc HTML.
-This version also adds authoring helpers for real page builds: theme/style discovery, available-block discovery, pattern listing, page recipes, landing-page generation, content validation, and one-step page creation.
+This version also adds authoring helpers for real page builds: theme/style discovery, block metadata, pattern inspection and insertion, section recipes, template and template-part inspection, media lookup, featured-image assignment, deeper content analysis, and one-step page creation.
 
 ## Requirements
 
@@ -42,12 +56,14 @@ This version also adds authoring helpers for real page builds: theme/style disco
 ## Suggested Workflow
 
 1. Use `gutenberg/block-guidance` when the MCP client needs to decide which block fits a scenario.
-2. Use `gutenberg/list-available-blocks` and `gutenberg/list-patterns` to understand the site context.
-3. Use `gutenberg/get-page-recipes` or `gutenberg/generate-landing-page` to draft a structure.
-4. Use `gutenberg/validate-content` to catch weak structure or round-trip problems.
-5. Use `gutenberg/create-page-from-blocks` or `gutenberg/create-landing-page` to create the page.
-6. Use `gutenberg/get-post-blocks` to inspect the saved result.
-7. Use `gutenberg/update-post-blocks` to iterate safely.
+2. Use `gutenberg/list-available-blocks`, `gutenberg/get-block-categories`, and `gutenberg/get-block-details` to understand the site block surface.
+3. Use `gutenberg/list-patterns` and `gutenberg/get-pattern` to discover reusable pattern content.
+4. Use `gutenberg/get-page-recipes`, `gutenberg/get-section-recipes`, `gutenberg/generate-section`, or `gutenberg/generate-landing-page` to draft content.
+5. Use `gutenberg/validate-content` and `gutenberg/analyze-content` to catch weak structure, missing hierarchy, link/media issues, and round-trip problems.
+6. Use `gutenberg/create-page-from-blocks`, `gutenberg/create-page-from-pattern`, or `gutenberg/create-landing-page` to create the page.
+7. Use `gutenberg/list-templates`, `gutenberg/get-template`, `gutenberg/list-template-parts`, and `gutenberg/get-template-part` when the active block theme matters.
+8. Use `gutenberg/list-media` and `gutenberg/set-post-featured-media` for media-aware authoring flows.
+9. Use `gutenberg/get-post-blocks`, `gutenberg/insert-pattern-into-post`, and `gutenberg/update-post-blocks` to iterate safely.
 
 ## Which Block To Use
 
@@ -95,4 +111,6 @@ The plugin exposes blocks in a normalized shape:
 - `update-post-blocks` can save either `content` directly or serialize `blocks`.
 - `gutenberg/block-guidance` returns machine-readable recommendations for common scenarios.
 - `gutenberg/generate-landing-page` intentionally uses core blocks and conservative theme-compatible markup.
-- This version focuses on safe block parsing, round-tripping, guidance, recipes, validation, and page generation. It still does not handle Markdown conversion, media upload orchestration, or custom-theme layout intelligence.
+- `gutenberg/create-page-from-pattern` and `gutenberg/insert-pattern-into-post` expose pattern content as a writable workflow, not just discovery.
+- `gutenberg/analyze-content` adds outline, link, media-reference, and block-usage analysis on top of basic validation.
+- This version still does not handle media upload itself, advanced block transforms/migrations, or deep theme-intelligence beyond the currently active block/theme registries.

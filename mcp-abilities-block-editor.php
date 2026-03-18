@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.2.0
+ * Version: 0.3.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -514,6 +514,508 @@ function mcp_abilities_gutenberg_get_pattern_catalog(): array {
 }
 
 /**
+ * Return compact block categories derived from registered block types.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_get_block_categories(): array {
+	$catalog    = mcp_abilities_gutenberg_get_block_catalog();
+	$categories = array();
+
+	foreach ( $catalog as $block ) {
+		$slug = isset( $block['category'] ) ? (string) $block['category'] : '';
+		if ( '' === $slug ) {
+			continue;
+		}
+
+		if ( ! isset( $categories[ $slug ] ) ) {
+			$categories[ $slug ] = array(
+				'slug'        => $slug,
+				'label'       => ucwords( str_replace( '-', ' ', $slug ) ),
+				'block_count' => 0,
+				'blocks'      => array(),
+			);
+		}
+
+		$categories[ $slug ]['block_count']++;
+		$categories[ $slug ]['blocks'][] = (string) $block['name'];
+	}
+
+	$values = array_values( $categories );
+	usort(
+		$values,
+		static function ( array $a, array $b ): int {
+			return strcmp( $a['slug'], $b['slug'] );
+		}
+	);
+
+	return $values;
+}
+
+/**
+ * Return a single block type definition.
+ *
+ * @param string $name Block name.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_get_block_details( string $name ) {
+	$registry   = WP_Block_Type_Registry::get_instance();
+	$block_type = $registry->get_registered( $name );
+
+	if ( ! $block_type ) {
+		return new WP_Error( 'mcp_gutenberg_block_not_found', 'Block type not found.' );
+	}
+
+	return array(
+		'name'             => (string) $block_type->name,
+		'title'            => (string) $block_type->title,
+		'description'      => (string) $block_type->description,
+		'category'         => is_string( $block_type->category ) ? $block_type->category : '',
+		'parent'           => is_array( $block_type->parent ) ? array_values( $block_type->parent ) : array(),
+		'ancestor'         => is_array( $block_type->ancestor ) ? array_values( $block_type->ancestor ) : array(),
+		'allowed_blocks'   => is_array( $block_type->allowed_blocks ) ? array_values( $block_type->allowed_blocks ) : array(),
+		'attributes'       => is_array( $block_type->attributes ) ? $block_type->attributes : array(),
+		'styles'           => is_array( $block_type->styles ) ? $block_type->styles : array(),
+		'supports'         => is_array( $block_type->supports ) ? $block_type->supports : array(),
+		'selectors'        => is_array( $block_type->selectors ) ? $block_type->selectors : array(),
+		'keywords'         => is_array( $block_type->keywords ) ? array_values( $block_type->keywords ) : array(),
+		'example'          => is_array( $block_type->example ) ? $block_type->example : array(),
+		'render_callback'  => is_callable( $block_type->render_callback ),
+		'uses_context'     => is_array( $block_type->uses_context ) ? array_values( $block_type->uses_context ) : array(),
+		'provides_context' => is_array( $block_type->provides_context ) ? $block_type->provides_context : array(),
+	);
+}
+
+/**
+ * Return a registered block pattern with optional raw content.
+ *
+ * @param string $name Pattern name.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_get_pattern_details( string $name ) {
+	if ( ! class_exists( 'WP_Block_Patterns_Registry' ) ) {
+		return new WP_Error( 'mcp_gutenberg_patterns_unavailable', 'Block patterns registry is unavailable.' );
+	}
+
+	$registry = WP_Block_Patterns_Registry::get_instance();
+	$pattern  = $registry->get_registered( $name );
+
+	if ( ! is_array( $pattern ) ) {
+		return new WP_Error( 'mcp_gutenberg_pattern_not_found', 'Pattern not found.' );
+	}
+
+	$content = isset( $pattern['content'] ) ? (string) $pattern['content'] : '';
+
+	return array(
+		'name'        => $name,
+		'title'       => (string) ( $pattern['title'] ?? '' ),
+		'description' => (string) ( $pattern['description'] ?? '' ),
+		'categories'  => array_values( is_array( $pattern['categories'] ?? null ) ? $pattern['categories'] : array() ),
+		'keywords'    => array_values( is_array( $pattern['keywords'] ?? null ) ? $pattern['keywords'] : array() ),
+		'block_types' => array_values( is_array( $pattern['blockTypes'] ?? null ) ? $pattern['blockTypes'] : array() ),
+		'post_types'  => array_values( is_array( $pattern['postTypes'] ?? null ) ? $pattern['postTypes'] : array() ),
+		'inserter'    => (bool) ( $pattern['inserter'] ?? true ),
+		'content'     => $content,
+		'summary'     => mcp_abilities_gutenberg_content_summary( $content ),
+		'blocks'      => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) ),
+	);
+}
+
+/**
+ * Return wp_template or wp_template_part posts.
+ *
+ * @param string $post_type Post type to load.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_get_template_entities( string $post_type ): array {
+	$posts = get_posts(
+		array(
+			'post_type'              => $post_type,
+			'post_status'            => array( 'publish', 'draft', 'auto-draft' ),
+			'posts_per_page'         => -1,
+			'orderby'                => 'title',
+			'order'                  => 'ASC',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		)
+	);
+
+	$items = array();
+	foreach ( $posts as $post ) {
+		$items[] = array(
+			'id'       => (int) $post->ID,
+			'slug'     => (string) $post->post_name,
+			'title'    => get_the_title( $post ),
+			'status'   => (string) $post->post_status,
+			'type'     => (string) $post->post_type,
+			'theme'    => (string) get_post_meta( $post->ID, 'theme', true ),
+			'area'     => (string) get_post_meta( $post->ID, 'area', true ),
+			'modified' => (string) $post->post_modified_gmt,
+		);
+	}
+
+	return $items;
+}
+
+/**
+ * Get a single template or template part.
+ *
+ * @param string $post_type Post type to load.
+ * @param array  $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_get_template_entity( string $post_type, array $input ) {
+	$post = null;
+
+	if ( isset( $input['post_id'] ) ) {
+		$post = get_post( (int) $input['post_id'] );
+	} elseif ( isset( $input['slug'] ) ) {
+		$posts = get_posts(
+			array(
+				'post_type'              => $post_type,
+				'name'                   => sanitize_title( (string) $input['slug'] ),
+				'post_status'            => array( 'publish', 'draft', 'auto-draft' ),
+				'posts_per_page'         => 1,
+				'orderby'                => 'ID',
+				'order'                  => 'ASC',
+				'no_found_rows'          => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+			)
+		);
+		$post = ! empty( $posts ) ? $posts[0] : null;
+	}
+
+	if ( ! $post instanceof WP_Post || $post_type !== $post->post_type ) {
+		return new WP_Error( 'mcp_gutenberg_template_not_found', 'Requested template entity not found.' );
+	}
+
+	$content = (string) $post->post_content;
+
+	return array(
+		'id'       => (int) $post->ID,
+		'slug'     => (string) $post->post_name,
+		'title'    => get_the_title( $post ),
+		'status'   => (string) $post->post_status,
+		'type'     => (string) $post->post_type,
+		'theme'    => (string) get_post_meta( $post->ID, 'theme', true ),
+		'area'     => (string) get_post_meta( $post->ID, 'area', true ),
+		'modified' => (string) $post->post_modified_gmt,
+		'content'  => $content,
+		'summary'  => mcp_abilities_gutenberg_content_summary( $content ),
+		'blocks'   => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) ),
+	);
+}
+
+/**
+ * Return compact media catalog data.
+ *
+ * @param array<string,mixed> $input Input query options.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_get_media_catalog( array $input ): array {
+	$search = isset( $input['search'] ) ? sanitize_text_field( (string) $input['search'] ) : '';
+	$limit  = isset( $input['limit'] ) ? max( 1, min( 50, (int) $input['limit'] ) ) : 20;
+
+	$posts = get_posts(
+		array(
+			'post_type'              => 'attachment',
+			'post_status'            => 'inherit',
+			'posts_per_page'         => $limit,
+			's'                      => $search,
+			'orderby'                => 'date',
+			'order'                  => 'DESC',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => true,
+			'update_post_term_cache' => false,
+		)
+	);
+
+	$items = array();
+	foreach ( $posts as $post ) {
+		$items[] = array(
+			'id'         => (int) $post->ID,
+			'title'      => get_the_title( $post ),
+			'slug'       => (string) $post->post_name,
+			'mime_type'  => (string) $post->post_mime_type,
+			'alt'        => (string) get_post_meta( $post->ID, '_wp_attachment_image_alt', true ),
+			'caption'    => (string) $post->post_excerpt,
+			'description'=> (string) $post->post_content,
+			'url'        => (string) wp_get_attachment_url( $post->ID ),
+			'thumbnail'  => (string) wp_get_attachment_image_url( $post->ID, 'medium' ),
+			'metadata'   => wp_get_attachment_metadata( $post->ID ) ?: array(),
+		);
+	}
+
+	return $items;
+}
+
+/**
+ * Collect heading outline from a normalized block tree.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_outline( array $blocks ): array {
+	$outline = array();
+
+	foreach ( $blocks as $block ) {
+		$name = isset( $block['block_name'] ) ? (string) $block['block_name'] : '';
+		if ( 'core/heading' === $name ) {
+			$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+			$text  = trim( wp_strip_all_tags( (string) ( $block['inner_html'] ?? '' ) ) );
+			$outline[] = array(
+				'level' => isset( $attrs['level'] ) ? (int) $attrs['level'] : 2,
+				'text'  => $text,
+			);
+		}
+
+		if ( ! empty( $block['inner_blocks'] ) && is_array( $block['inner_blocks'] ) ) {
+			$outline = array_merge( $outline, mcp_abilities_gutenberg_collect_outline( $block['inner_blocks'] ) );
+		}
+	}
+
+	return $outline;
+}
+
+/**
+ * Collect links from a normalized block tree.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ * @return array<int,string>
+ */
+function mcp_abilities_gutenberg_collect_links( array $blocks ): array {
+	$links = array();
+
+	foreach ( $blocks as $block ) {
+		$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+		foreach ( array( 'url', 'href' ) as $key ) {
+			if ( ! empty( $attrs[ $key ] ) && is_string( $attrs[ $key ] ) ) {
+				$links[] = $attrs[ $key ];
+			}
+		}
+
+		$inner_html = isset( $block['inner_html'] ) ? (string) $block['inner_html'] : '';
+		if ( '' !== $inner_html && preg_match_all( '/href=[\'"]([^\'"]+)[\'"]/', $inner_html, $matches ) ) {
+			foreach ( $matches[1] as $url ) {
+				$links[] = (string) $url;
+			}
+		}
+
+		if ( ! empty( $block['inner_blocks'] ) && is_array( $block['inner_blocks'] ) ) {
+			$links = array_merge( $links, mcp_abilities_gutenberg_collect_links( $block['inner_blocks'] ) );
+		}
+	}
+
+	return array_values( array_unique( array_filter( array_map( 'strval', $links ) ) ) );
+}
+
+/**
+ * Collect media references from a normalized block tree.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_media_refs( array $blocks ): array {
+	$items = array();
+
+	foreach ( $blocks as $block ) {
+		$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+		$name  = isset( $block['block_name'] ) ? (string) $block['block_name'] : '';
+
+		if ( in_array( $name, array( 'core/image', 'core/cover', 'core/media-text', 'core/gallery' ), true ) ) {
+			$item = array(
+				'block_name'     => $name,
+				'attachment_id'  => isset( $attrs['id'] ) ? (int) $attrs['id'] : 0,
+				'url'            => isset( $attrs['url'] ) ? (string) $attrs['url'] : '',
+				'media_link'     => isset( $attrs['linkDestination'] ) ? (string) $attrs['linkDestination'] : '',
+				'alt'            => isset( $attrs['alt'] ) ? (string) $attrs['alt'] : '',
+			);
+			$items[] = $item;
+		}
+
+		if ( ! empty( $block['inner_blocks'] ) && is_array( $block['inner_blocks'] ) ) {
+			$items = array_merge( $items, mcp_abilities_gutenberg_collect_media_refs( $block['inner_blocks'] ) );
+		}
+	}
+
+	return $items;
+}
+
+/**
+ * Count block usage recursively.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ * @return array<string,int>
+ */
+function mcp_abilities_gutenberg_collect_block_usage( array $blocks ): array {
+	$usage = array();
+
+	foreach ( $blocks as $block ) {
+		$name = isset( $block['block_name'] ) ? (string) $block['block_name'] : '';
+		if ( '' !== $name ) {
+			$usage[ $name ] = isset( $usage[ $name ] ) ? $usage[ $name ] + 1 : 1;
+		}
+
+		if ( ! empty( $block['inner_blocks'] ) && is_array( $block['inner_blocks'] ) ) {
+			foreach ( mcp_abilities_gutenberg_collect_block_usage( $block['inner_blocks'] ) as $inner_name => $count ) {
+				$usage[ $inner_name ] = isset( $usage[ $inner_name ] ) ? $usage[ $inner_name ] + $count : $count;
+			}
+		}
+	}
+
+	ksort( $usage );
+
+	return $usage;
+}
+
+/**
+ * Build a richer analysis payload for block content.
+ *
+ * @param string $content Content to inspect.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_analyze_content( string $content ): array {
+	$normalized = mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) );
+
+	return array(
+		'summary'     => mcp_abilities_gutenberg_content_summary( $content ),
+		'validation'  => mcp_abilities_gutenberg_validate_content( $content ),
+		'outline'     => mcp_abilities_gutenberg_collect_outline( $normalized ),
+		'links'       => mcp_abilities_gutenberg_collect_links( $normalized ),
+		'media'       => mcp_abilities_gutenberg_collect_media_refs( $normalized ),
+		'block_usage' => mcp_abilities_gutenberg_collect_block_usage( $normalized ),
+		'blocks'      => $normalized,
+	);
+}
+
+/**
+ * Return reusable section recipes.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_get_section_recipes(): array {
+	return array(
+		array(
+			'slug'        => 'hero',
+			'label'       => 'Hero',
+			'description' => 'Large introductory section with eyebrow, headline, body copy, and buttons.',
+			'blocks'      => array( 'core/group', 'core/paragraph', 'core/heading', 'core/buttons' ),
+		),
+		array(
+			'slug'        => 'feature-list',
+			'label'       => 'Feature List',
+			'description' => 'Feature or offering cards arranged in columns.',
+			'blocks'      => array( 'core/group', 'core/columns', 'core/heading', 'core/paragraph' ),
+		),
+		array(
+			'slug'        => 'faq',
+			'label'       => 'FAQ',
+			'description' => 'Question and answer stack using headings and paragraphs.',
+			'blocks'      => array( 'core/group', 'core/heading', 'core/paragraph' ),
+		),
+		array(
+			'slug'        => 'testimonial',
+			'label'       => 'Testimonial',
+			'description' => 'Pull quote or customer quote block.',
+			'blocks'      => array( 'core/quote', 'core/group' ),
+		),
+		array(
+			'slug'        => 'stats',
+			'label'       => 'Stats',
+			'description' => 'Short highlight metrics in columns.',
+			'blocks'      => array( 'core/columns', 'core/heading', 'core/paragraph' ),
+		),
+		array(
+			'slug'        => 'final-cta',
+			'label'       => 'Final CTA',
+			'description' => 'Closing conversion section with button and support text.',
+			'blocks'      => array( 'core/group', 'core/heading', 'core/paragraph', 'core/buttons' ),
+		),
+	);
+}
+
+/**
+ * Generate a reusable section payload.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_generate_section_payload( array $input ) {
+	$section  = isset( $input['section'] ) ? sanitize_key( (string) $input['section'] ) : 'hero';
+	$title    = isset( $input['title'] ) ? trim( (string) $input['title'] ) : 'Section Title';
+	$body     = isset( $input['body'] ) ? trim( (string) $input['body'] ) : 'Supporting copy goes here.';
+	$items    = isset( $input['items'] ) && is_array( $input['items'] ) ? array_values( array_filter( array_map( 'strval', $input['items'] ) ) ) : array();
+	$eyebrow  = isset( $input['eyebrow'] ) ? trim( (string) $input['eyebrow'] ) : 'Section';
+	$cta      = isset( $input['cta_text'] ) ? trim( (string) $input['cta_text'] ) : 'Learn More';
+	$content  = '';
+
+	switch ( $section ) {
+		case 'hero':
+			$content = '<!-- wp:group {"style":{"spacing":{"padding":{"top":"4rem","bottom":"4rem","left":"min(6vw,4rem)","right":"min(6vw,4rem)"},"blockGap":"1rem"},"color":{"gradient":"linear-gradient(135deg,rgb(24,18,16) 0%,rgb(70,46,33) 42%,rgb(198,150,93) 100%)"}},"textColor":"base","layout":{"type":"constrained"}} --><div class="wp-block-group has-base-color has-text-color has-background" style="background:linear-gradient(135deg,rgb(24,18,16) 0%,rgb(70,46,33) 42%,rgb(198,150,93) 100%);padding-top:4rem;padding-right:min(6vw,4rem);padding-bottom:4rem;padding-left:min(6vw,4rem)">'
+				. mcp_abilities_gutenberg_paragraph_block( $eyebrow, array( 'fontSize' => 'small' ) )
+				. mcp_abilities_gutenberg_heading_block( $title, 1 )
+				. mcp_abilities_gutenberg_paragraph_block( $body )
+				. '<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'feature-list':
+			$columns = '';
+			foreach ( array_slice( $items, 0, 4 ) as $item ) {
+				$columns .= '<!-- wp:column --><div class="wp-block-column">' . mcp_abilities_gutenberg_heading_block( $item, 3 ) . mcp_abilities_gutenberg_paragraph_block( $body ) . '</div><!-- /wp:column -->';
+			}
+			$content = '<!-- wp:group {"style":{"spacing":{"blockGap":"1rem"}},"layout":{"type":"constrained"}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. '<!-- wp:columns --><div class="wp-block-columns">' . $columns . '</div><!-- /wp:columns -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'faq':
+			$faq_items = '';
+			foreach ( array_slice( $items, 0, 6 ) as $item ) {
+				$faq_items .= mcp_abilities_gutenberg_heading_block( $item, 3 ) . mcp_abilities_gutenberg_paragraph_block( $body );
+			}
+			$content = '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. $faq_items
+				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'testimonial':
+			$content = '<!-- wp:quote {"className":"is-style-large"} --><blockquote class="wp-block-quote is-style-large"><p>' . esc_html( $body ) . '</p><cite>' . esc_html( $title ) . '</cite></blockquote><!-- /wp:quote -->';
+			break;
+
+		case 'stats':
+			$columns = '';
+			foreach ( array_slice( $items, 0, 4 ) as $item ) {
+				$columns .= '<!-- wp:column --><div class="wp-block-column">' . mcp_abilities_gutenberg_heading_block( $item, 3 ) . mcp_abilities_gutenberg_paragraph_block( $body ) . '</div><!-- /wp:column -->';
+			}
+			$content = '<!-- wp:columns --><div class="wp-block-columns">' . $columns . '</div><!-- /wp:columns -->';
+			break;
+
+		case 'final-cta':
+			$content = '<!-- wp:group {"backgroundColor":"base-2","style":{"spacing":{"padding":{"top":"3rem","bottom":"3rem","left":"min(6vw,4rem)","right":"min(6vw,4rem)"},"blockGap":"1rem"}},"layout":{"type":"constrained"}} --><div class="wp-block-group has-base-2-background-color has-background" style="padding-top:3rem;padding-right:min(6vw,4rem);padding-bottom:3rem;padding-left:min(6vw,4rem)">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. mcp_abilities_gutenberg_paragraph_block( $body )
+				. '<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		default:
+			return new WP_Error( 'mcp_gutenberg_unknown_section', 'Unsupported section recipe.' );
+	}
+
+	return array(
+		'section' => $section,
+		'content' => $content,
+		'summary' => mcp_abilities_gutenberg_content_summary( $content ),
+		'blocks'  => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) ),
+	);
+}
+
+/**
  * Build validation results for block content.
  *
  * @param string $content Content to validate.
@@ -955,6 +1457,158 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 }
 
 /**
+ * Create a page from a registered pattern.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_create_page_from_pattern( array $input ): array {
+	$pattern_name = isset( $input['pattern_name'] ) ? (string) $input['pattern_name'] : '';
+	$pattern      = mcp_abilities_gutenberg_get_pattern_details( $pattern_name );
+
+	if ( is_wp_error( $pattern ) ) {
+		return array(
+			'success' => false,
+			'message' => $pattern->get_error_message(),
+		);
+	}
+
+	$create = mcp_abilities_gutenberg_create_page_from_input(
+		array(
+			'title'                => isset( $input['title'] ) ? (string) $input['title'] : (string) $pattern['title'],
+			'slug'                 => isset( $input['slug'] ) ? (string) $input['slug'] : sanitize_title( (string) $pattern['title'] ),
+			'status'               => isset( $input['status'] ) ? (string) $input['status'] : 'draft',
+			'upsert_matching_slug' => ! empty( $input['upsert_matching_slug'] ),
+			'content'              => (string) $pattern['content'],
+		)
+	);
+
+	if ( ! empty( $create['success'] ) ) {
+		$create['pattern'] = $pattern;
+	}
+
+	return $create;
+}
+
+/**
+ * Insert a registered pattern into an existing post.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_insert_pattern_into_post( array $input ): array {
+	$post_id      = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
+	$pattern_name = isset( $input['pattern_name'] ) ? (string) $input['pattern_name'] : '';
+	$position     = isset( $input['position'] ) ? (string) $input['position'] : 'append';
+
+	$post = mcp_abilities_gutenberg_get_editable_post( $post_id );
+	if ( is_wp_error( $post ) ) {
+		return array(
+			'success' => false,
+			'message' => $post->get_error_message(),
+		);
+	}
+
+	$pattern = mcp_abilities_gutenberg_get_pattern_details( $pattern_name );
+	if ( is_wp_error( $pattern ) ) {
+		return array(
+			'success' => false,
+			'message' => $pattern->get_error_message(),
+		);
+	}
+
+	$existing_content = (string) $post->post_content;
+	$pattern_content  = (string) $pattern['content'];
+	$content          = $existing_content;
+
+	if ( 'prepend' === $position ) {
+		$content = $pattern_content . "\n\n" . $existing_content;
+	} elseif ( 'replace' === $position ) {
+		$content = $pattern_content;
+	} else {
+		$content = $existing_content . "\n\n" . $pattern_content;
+	}
+
+	$result = wp_update_post(
+		wp_slash(
+			array(
+				'ID'           => (int) $post->ID,
+				'post_content' => $content,
+			)
+		),
+		true
+	);
+
+	if ( is_wp_error( $result ) ) {
+		return array(
+			'success' => false,
+			'message' => $result->get_error_message(),
+		);
+	}
+
+	$updated_post = get_post( (int) $post->ID );
+
+	return array(
+		'success' => true,
+		'message' => 'Pattern inserted successfully.',
+		'post'    => array(
+			'id'       => (int) $post->ID,
+			'type'     => $updated_post ? (string) $updated_post->post_type : (string) $post->post_type,
+			'status'   => $updated_post ? (string) $updated_post->post_status : (string) $post->post_status,
+			'slug'     => $updated_post ? (string) $updated_post->post_name : (string) $post->post_name,
+			'title'    => $updated_post ? get_the_title( $updated_post ) : get_the_title( $post ),
+			'url'      => $updated_post ? get_permalink( $updated_post ) : get_permalink( $post ),
+			'modified' => $updated_post ? (string) $updated_post->post_modified_gmt : (string) $post->post_modified_gmt,
+		),
+		'content' => $content,
+		'summary' => mcp_abilities_gutenberg_content_summary( $content ),
+		'blocks'  => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) ),
+	);
+}
+
+/**
+ * Set a post featured image.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_set_post_featured_media( array $input ): array {
+	$post_id       = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
+	$attachment_id = isset( $input['attachment_id'] ) ? (int) $input['attachment_id'] : 0;
+
+	$post = mcp_abilities_gutenberg_get_editable_post( $post_id );
+	if ( is_wp_error( $post ) ) {
+		return array(
+			'success' => false,
+			'message' => $post->get_error_message(),
+		);
+	}
+
+	if ( $attachment_id <= 0 || 'attachment' !== get_post_type( $attachment_id ) ) {
+		return array(
+			'success' => false,
+			'message' => 'attachment_id must reference an attachment.',
+		);
+	}
+
+	$result = set_post_thumbnail( $post_id, $attachment_id );
+	if ( ! $result ) {
+		return array(
+			'success' => false,
+			'message' => 'Failed to set featured media.',
+		);
+	}
+
+	return array(
+		'success'       => true,
+		'message'       => 'Featured media updated successfully.',
+		'post_id'       => $post_id,
+		'attachment_id' => $attachment_id,
+		'featured_url'  => (string) wp_get_attachment_image_url( $attachment_id, 'full' ),
+	);
+}
+
+/**
  * Register Gutenberg abilities.
  */
 function mcp_abilities_gutenberg_register_abilities(): void {
@@ -1132,6 +1786,145 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 	);
 
 	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-block-categories',
+		array(
+			'label'               => 'Get Block Categories',
+			'description'         => 'Return compact block category groupings derived from the registered block catalog.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(),
+				'default'              => array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'    => array( 'type' => 'boolean' ),
+					'count'      => array( 'type' => 'integer' ),
+					'categories' => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function (): array {
+				$categories = mcp_abilities_gutenberg_get_block_categories();
+				return array(
+					'success'    => true,
+					'count'      => count( $categories ),
+					'categories' => $categories,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-block-details',
+		array(
+			'label'               => 'Get Block Details',
+			'description'         => 'Return full metadata for a single registered block type.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'name' ),
+				'properties'           => array(
+					'name' => array(
+						'type'        => 'string',
+						'description' => 'Registered block name such as core/group.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'block'   => array( 'type' => 'object' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$details = mcp_abilities_gutenberg_get_block_details( isset( $input['name'] ) ? (string) $input['name'] : '' );
+				if ( is_wp_error( $details ) ) {
+					return array(
+						'success' => false,
+						'message' => $details->get_error_message(),
+					);
+				}
+
+				return array(
+					'success' => true,
+					'block'   => $details,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-pattern',
+		array(
+			'label'               => 'Get Block Pattern',
+			'description'         => 'Return a registered block pattern including raw content, summary, and normalized blocks.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'name' ),
+				'properties'           => array(
+					'name' => array(
+						'type'        => 'string',
+						'description' => 'Registered pattern name.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'pattern' => array( 'type' => 'object' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$pattern = mcp_abilities_gutenberg_get_pattern_details( isset( $input['name'] ) ? (string) $input['name'] : '' );
+				if ( is_wp_error( $pattern ) ) {
+					return array(
+						'success' => false,
+						'message' => $pattern->get_error_message(),
+					);
+				}
+
+				return array(
+					'success' => true,
+					'pattern' => $pattern,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/block-guidance',
 		array(
 			'label'               => 'Get Gutenberg Block Guidance',
@@ -1204,6 +1997,42 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				return array(
 					'success' => true,
 					'recipes' => mcp_abilities_gutenberg_get_page_recipes(),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-section-recipes',
+		array(
+			'label'               => 'Get Section Recipes',
+			'description'         => 'Return reusable Gutenberg section recipes for common landing-page and marketing layouts.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(),
+				'default'              => array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'  => array( 'type' => 'boolean' ),
+					'recipes'  => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function (): array {
+				return array(
+					'success' => true,
+					'recipes' => mcp_abilities_gutenberg_get_section_recipes(),
 				);
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
@@ -1296,6 +2125,78 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 	);
 
 	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/generate-section',
+		array(
+			'label'               => 'Generate Section Blocks',
+			'description'         => 'Generate a reusable Gutenberg section such as a hero, feature list, FAQ, testimonial, stats row, or final CTA.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'section' ),
+				'properties'           => array(
+					'section' => array(
+						'type'        => 'string',
+						'description' => 'Section recipe slug.',
+						'enum'        => array( 'hero', 'feature-list', 'faq', 'testimonial', 'stats', 'final-cta' ),
+					),
+					'title' => array(
+						'type'        => 'string',
+						'description' => 'Section headline or label.',
+					),
+					'body' => array(
+						'type'        => 'string',
+						'description' => 'Main supporting copy.',
+					),
+					'eyebrow' => array(
+						'type'        => 'string',
+						'description' => 'Optional eyebrow text for hero sections.',
+					),
+					'cta_text' => array(
+						'type'        => 'string',
+						'description' => 'Button label where relevant.',
+					),
+					'items' => array(
+						'type'        => 'array',
+						'description' => 'Feature, FAQ, or stat labels used by the chosen recipe.',
+						'items'       => array( 'type' => 'string' ),
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'section' => array( 'type' => 'string' ),
+					'content' => array( 'type' => 'string' ),
+					'summary' => array( 'type' => 'object' ),
+					'blocks'  => array( 'type' => 'array' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$result = mcp_abilities_gutenberg_generate_section_payload( is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $result ) ) {
+					return array(
+						'success' => false,
+						'message' => $result->get_error_message(),
+					);
+				}
+
+				return array_merge( array( 'success' => true ), $result );
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/validate-content',
 		array(
 			'label'               => 'Validate Gutenberg Content',
@@ -1347,6 +2248,70 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'success'    => true,
 					'message'    => 'Validation completed.',
 					'validation' => mcp_abilities_gutenberg_validate_content( $content ),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/analyze-content',
+		array(
+			'label'               => 'Analyze Gutenberg Content',
+			'description'         => 'Return structural analysis for Gutenberg content including validation, outline, block usage, links, and media references.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'content' => array(
+						'type'        => 'string',
+						'description' => 'Raw Gutenberg content to analyze.',
+					),
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Optional post ID to analyze when content is omitted.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'  => array( 'type' => 'boolean' ),
+					'analysis' => array( 'type' => 'object' ),
+					'message'  => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$content = '';
+				if ( isset( $input['content'] ) && is_string( $input['content'] ) ) {
+					$content = $input['content'];
+				} elseif ( isset( $input['post_id'] ) ) {
+					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
+					if ( is_wp_error( $post ) ) {
+						return array(
+							'success' => false,
+							'message' => $post->get_error_message(),
+						);
+					}
+					$content = (string) $post->post_content;
+				} else {
+					return array(
+						'success' => false,
+						'message' => 'Provide content or post_id.',
+					);
+				}
+
+				return array(
+					'success'  => true,
+					'analysis' => mcp_abilities_gutenberg_analyze_content( $content ),
 				);
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
@@ -1542,6 +2507,276 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 	);
 
 	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/list-templates',
+		array(
+			'label'               => 'List Block Templates',
+			'description'         => 'Return `wp_template` entities available to the active block theme.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(),
+				'default'              => array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'   => array( 'type' => 'boolean' ),
+					'templates' => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function (): array {
+				return array(
+					'success'   => true,
+					'templates' => mcp_abilities_gutenberg_get_template_entities( 'wp_template' ),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-template',
+		array(
+			'label'               => 'Get Block Template',
+			'description'         => 'Return a `wp_template` entity with raw content and normalized blocks.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Template post ID.',
+					),
+					'slug' => array(
+						'type'        => 'string',
+						'description' => 'Template slug.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'  => array( 'type' => 'boolean' ),
+					'template' => array( 'type' => 'object' ),
+					'message'  => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$template = mcp_abilities_gutenberg_get_template_entity( 'wp_template', is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $template ) ) {
+					return array(
+						'success' => false,
+						'message' => $template->get_error_message(),
+					);
+				}
+
+				return array(
+					'success'  => true,
+					'template' => $template,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/list-template-parts',
+		array(
+			'label'               => 'List Template Parts',
+			'description'         => 'Return `wp_template_part` entities available to the active block theme.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(),
+				'default'              => array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'parts'   => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function (): array {
+				return array(
+					'success' => true,
+					'parts'   => mcp_abilities_gutenberg_get_template_entities( 'wp_template_part' ),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-template-part',
+		array(
+			'label'               => 'Get Template Part',
+			'description'         => 'Return a `wp_template_part` entity with raw content and normalized blocks.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Template part post ID.',
+					),
+					'slug' => array(
+						'type'        => 'string',
+						'description' => 'Template part slug.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'part'    => array( 'type' => 'object' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$part = mcp_abilities_gutenberg_get_template_entity( 'wp_template_part', is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $part ) ) {
+					return array(
+						'success' => false,
+						'message' => $part->get_error_message(),
+					);
+				}
+
+				return array(
+					'success' => true,
+					'part'    => $part,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/list-media',
+		array(
+			'label'               => 'List Media Library Items',
+			'description'         => 'Return recent media library items useful for Gutenberg image, cover, gallery, and featured-image workflows.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'search' => array(
+						'type'        => 'string',
+						'description' => 'Optional media search term.',
+					),
+					'limit' => array(
+						'type'        => 'integer',
+						'description' => 'Maximum number of results, from 1 to 50.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'media'   => array( 'type' => 'array' ),
+					'count'   => array( 'type' => 'integer' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$media = mcp_abilities_gutenberg_get_media_catalog( is_array( $input ) ? $input : array() );
+				return array(
+					'success' => true,
+					'count'   => count( $media ),
+					'media'   => $media,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/set-post-featured-media',
+		array(
+			'label'               => 'Set Post Featured Media',
+			'description'         => 'Assign an attachment as the featured image for a post or page.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'post_id', 'attachment_id' ),
+				'properties'           => array(
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Target post or page ID.',
+					),
+					'attachment_id' => array(
+						'type'        => 'integer',
+						'description' => 'Attachment ID from the media library.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'       => array( 'type' => 'boolean' ),
+					'message'       => array( 'type' => 'string' ),
+					'post_id'       => array( 'type' => 'integer' ),
+					'attachment_id' => array( 'type' => 'integer' ),
+					'featured_url'  => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				return mcp_abilities_gutenberg_set_post_featured_media( is_array( $input ) ? $input : array() );
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/create-page-from-blocks',
 		array(
 			'label'               => 'Create Page From Gutenberg Blocks',
@@ -1593,6 +2828,66 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_create_page_from_input( is_array( $input ) ? $input : array() );
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/create-page-from-pattern',
+		array(
+			'label'               => 'Create Page From Pattern',
+			'description'         => 'Create or upsert a page from a registered block pattern.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'required'   => array( 'pattern_name' ),
+				'properties' => array(
+					'pattern_name' => array(
+						'type'        => 'string',
+						'description' => 'Registered pattern name.',
+					),
+					'title' => array(
+						'type'        => 'string',
+						'description' => 'Optional page title override.',
+					),
+					'slug' => array(
+						'type'        => 'string',
+						'description' => 'Optional page slug.',
+					),
+					'upsert_matching_slug' => array(
+						'type'        => 'boolean',
+						'description' => 'Update the earliest existing page with the same slug instead of creating a duplicate page.',
+					),
+					'status' => array(
+						'type'        => 'string',
+						'description' => 'Page status.',
+						'enum'        => array( 'publish', 'draft', 'pending', 'private' ),
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+					'post'    => array( 'type' => 'object' ),
+					'pattern' => array( 'type' => 'object' ),
+					'content' => array( 'type' => 'string' ),
+					'summary' => array( 'type' => 'object' ),
+					'blocks'  => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				return mcp_abilities_gutenberg_create_page_from_pattern( is_array( $input ) ? $input : array() );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
 			'meta'                => array(
@@ -1689,6 +2984,57 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				}
 
 				return $create;
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/insert-pattern-into-post',
+		array(
+			'label'               => 'Insert Pattern Into Post',
+			'description'         => 'Append, prepend, or replace a post or page with a registered block pattern.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'required'   => array( 'post_id', 'pattern_name' ),
+				'properties' => array(
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Target post or page ID.',
+					),
+					'pattern_name' => array(
+						'type'        => 'string',
+						'description' => 'Registered pattern name.',
+					),
+					'position' => array(
+						'type'        => 'string',
+						'description' => 'How to apply the pattern content.',
+						'enum'        => array( 'append', 'prepend', 'replace' ),
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+					'post'    => array( 'type' => 'object' ),
+					'content' => array( 'type' => 'string' ),
+					'summary' => array( 'type' => 'object' ),
+					'blocks'  => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				return mcp_abilities_gutenberg_insert_pattern_into_post( is_array( $input ) ? $input : array() );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
 			'meta'                => array(

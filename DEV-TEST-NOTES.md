@@ -7,7 +7,7 @@ Plugin: `mcp-abilities-block-editor`
 ## Verified on dev
 
 - `wp plugin check` passed after the latest deploy.
-- All 14 `gutenberg/*` abilities were registered on `dev`.
+- All 28 `gutenberg/*` abilities were registered on `dev`.
 - `generate-landing-page` produced a 12-block, 246-word landing-page payload for Bollesen Bakery.
 - `parse-content` and `serialize-blocks` round-tripped successfully.
 - `create-page-from-blocks` updated the existing `bollesen-bakery-block-test` draft when `upsert_matching_slug` was enabled.
@@ -31,11 +31,11 @@ Plugin: `mcp-abilities-block-editor`
 - Theme-aware composition is still shallow.
   - The plugin can read palette, theme context, block availability, and patterns, but the actual landing-page generator still uses a baked-in layout and copy recipe instead of adapting to active theme patterns or spacing systems.
 
-- Pattern insertion is read-only.
-  - `list-patterns` is useful for discovery, but there is no ability yet to instantiate or merge a chosen pattern into a generated page.
+- Pattern-based writing still needs broader transforms.
+  - Patterns can now be read, turned into pages, and inserted into posts, but there is still no block-level pattern merge/pluck/replace workflow beyond append/prepend/replace whole pattern content.
 
-- Media handling is missing.
-  - There is no image upload, media lookup, featured image assignment, gallery assembly, or block-level media replacement workflow.
+- Media handling is partial.
+  - Media library lookup and featured-image assignment now exist, but there is still no upload flow, gallery assembly helper, or attachment-to-block replacement workflow.
 
 - CTA links are placeholders.
   - Buttons are generated with labels only; there is no URL input enforcement, link validation, or conversion-focused CTA modeling.
@@ -46,8 +46,8 @@ Plugin: `mcp-abilities-block-editor`
 - Validation is still structural, not editorial.
   - It now walks nested blocks, but it does not score accessibility, CTA completeness, broken links, empty anchors, heading hierarchy quality, or brand/legal content quality.
 
-- No reusable section library yet.
-  - There is guidance and one landing-page generator, but there are no first-class hero/FAQ/pricing/testimonial/gallery/FAQ recipe abilities that can be inserted independently.
+- Reusable section coverage is partial.
+  - The plugin now ships section recipes plus section generation for hero, feature-list, FAQ, testimonial, stats, and final CTA, but it still lacks richer recipes like gallery, pricing, comparison tables, team, timeline, and map/contact variants.
 
 - No visual asset orchestration.
   - The plugin can create “eye candy” with gradients, spacing, columns, quote blocks, and buttons, but it still lacks illustration/image direction, duotone handling, background media, and pattern-driven visual variants.
