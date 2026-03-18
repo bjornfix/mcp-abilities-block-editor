@@ -27,6 +27,7 @@ WordPress block-editor abilities for MCP. This add-on makes Gutenberg content us
 - `gutenberg/evaluate-copy`
 - `gutenberg/suggest-copy-fixes`
 - `gutenberg/analyze-content`
+- `gutenberg/evaluate-render-context`
 - `gutenberg/parse-content`
 - `gutenberg/serialize-blocks`
 - `gutenberg/get-post-blocks`
@@ -93,7 +94,7 @@ This version also adds authoring helpers for real page builds: theme/style disco
 2. Use `gutenberg/list-available-blocks`, `gutenberg/get-block-categories`, `gutenberg/get-block-details`, and `gutenberg/get-block-style-variations` to understand the site block surface.
 3. Use `gutenberg/list-patterns` and `gutenberg/get-pattern` to discover reusable pattern content.
 4. Use `gutenberg/get-page-recipes`, `gutenberg/get-section-recipes`, `gutenberg/generate-section`, or `gutenberg/generate-landing-page` to draft content.
-5. Use `gutenberg/validate-content`, `gutenberg/audit-content`, `gutenberg/evaluate-copy`, `gutenberg/suggest-copy-fixes`, and `gutenberg/analyze-content` to catch weak structure, weak writing, missing hierarchy, link/media issues, round-trip problems, and static-block mutation guardrails.
+5. Use `gutenberg/validate-content`, `gutenberg/audit-content`, `gutenberg/evaluate-copy`, `gutenberg/suggest-copy-fixes`, `gutenberg/analyze-content`, and `gutenberg/evaluate-render-context` to catch weak structure, weak writing, missing hierarchy, link/media issues, round-trip problems, static-block mutation guardrails, and wrapper-level render-context issues around the page content.
 6. Use `gutenberg/create-page-from-blocks`, `gutenberg/create-page-from-pattern`, or `gutenberg/create-landing-page` to create the page.
 7. Use `gutenberg/get-site-editor-summary`, `gutenberg/get-site-editor-references`, `gutenberg/list-templates`, `gutenberg/get-template`, `gutenberg/create-template`, `gutenberg/update-template`, `gutenberg/list-template-parts`, `gutenberg/get-template-part`, `gutenberg/list-navigations`, `gutenberg/get-navigation`, `gutenberg/find-navigation-usage`, `gutenberg/find-template-part-usage`, and `gutenberg/find-synced-pattern-usage` when the active block theme or reusable block relationships matter.
 8. Use the main plugin's generic media abilities for uploads, media lookup, and featured-image updates.
@@ -152,6 +153,7 @@ The plugin exposes blocks in a normalized shape:
 - `gutenberg/evaluate-copy` adds lightweight editorial heuristics for vague CTAs, generic headings, dense paragraphs, shouty copy, and readability drift.
 - `gutenberg/suggest-copy-fixes` turns those editorial issues into block-level rewrite suggestions and replacement options.
 - `gutenberg/validate-content` now reports mutation guardrails so static versus dynamic block surfaces are easier to reason about before editing.
+- `gutenberg/evaluate-render-context` inspects the rendered page around `.entry-content` so empty wrappers, leading style blocks, and other layout-context smells can be caught even when the block markup itself is valid.
 - `gutenberg/extract-synced-pattern` lets an MCP client promote an existing block subtree into a reusable `wp_block` pattern and optionally replace the source with a `core/block` reference.
 - `gutenberg/insert-synced-pattern-into-post` inserts true reusable pattern references into existing posts instead of flattening pattern content.
 - `gutenberg/find-synced-pattern-usage` makes reusable blocks safer by showing where a synced pattern is referenced before editing it.

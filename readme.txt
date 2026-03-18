@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.12.0
+Stable tag: 0.13.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -39,6 +39,7 @@ Included abilities:
 - `gutenberg/evaluate-copy`
 - `gutenberg/suggest-copy-fixes`
 - `gutenberg/analyze-content`
+- `gutenberg/evaluate-render-context`
 - `gutenberg/parse-content`
 - `gutenberg/serialize-blocks`
 - `gutenberg/get-post-blocks`
@@ -93,6 +94,7 @@ This is useful when an MCP client needs to:
 - generate reusable sections like hero, FAQ, CTA, testimonial, stats rows, pricing, team, timeline, gallery, and contact-map layouts
 - generate a structured landing page from business inputs
 - validate round-trip safety, page structure, outline, link/media usage, Gutenberg-specific QA issues, copy quality, and static-block mutation risks
+- evaluate rendered page chrome around Gutenberg content for wrapper-induced layout issues
 - turn weak copy findings into block-level rewrite suggestions
 - inspect Gutenberg content as nested blocks
 - preserve block formatting and attributes
@@ -128,6 +130,9 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.13.0 =
+- Added rendered-page context evaluation so wrapper-level layout issues around Gutenberg content can be detected from the live page.
 
 = 0.12.0 =
 - Added a static-block render-risk guard so unsafe attr-only mutations fail fast unless explicitly overridden.

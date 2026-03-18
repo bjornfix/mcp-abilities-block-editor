@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.12.0
+ * Version: 0.13.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -2131,6 +2131,222 @@ function mcp_abilities_gutenberg_analyze_content( string $content ): array {
 		'media'       => mcp_abilities_gutenberg_collect_media_refs( $normalized ),
 		'block_usage' => mcp_abilities_gutenberg_collect_block_usage( $normalized ),
 		'blocks'      => $normalized,
+	);
+}
+
+/**
+ * Check whether a DOM element has meaningful rendered content.
+ *
+ * @param DOMElement $element Element to inspect.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_dom_element_has_meaningful_content( DOMElement $element ): bool {
+	$meaningful_tags = array( 'img', 'picture', 'video', 'iframe', 'canvas', 'svg', 'form', 'input', 'textarea', 'select', 'button' );
+	$tag_name        = strtolower( $element->tagName );
+
+	if ( in_array( $tag_name, $meaningful_tags, true ) ) {
+		return true;
+	}
+
+	foreach ( $meaningful_tags as $meaningful_tag ) {
+		if ( $element->getElementsByTagName( $meaningful_tag )->length > 0 ) {
+			return true;
+		}
+	}
+
+	return '' !== trim( preg_replace( '/\s+/u', ' ', (string) $element->textContent ) );
+}
+
+/**
+ * Return a short CSS-like selector for an element.
+ *
+ * @param DOMElement $element Element to describe.
+ * @return string
+ */
+function mcp_abilities_gutenberg_describe_dom_element( DOMElement $element ): string {
+	$selector = strtolower( $element->tagName );
+	$id       = $element->getAttribute( 'id' );
+	if ( '' !== $id ) {
+		$selector .= '#' . $id;
+	}
+
+	$class_name = trim( preg_replace( '/\s+/u', ' ', $element->getAttribute( 'class' ) ) );
+	if ( '' !== $class_name ) {
+		$classes = array_slice(
+			array_values(
+				array_filter(
+					explode( ' ', $class_name ),
+					static function ( string $value ): bool {
+						return '' !== $value;
+					}
+				)
+			),
+			0,
+			3
+		);
+		foreach ( $classes as $class ) {
+			$selector .= '.' . $class;
+		}
+	}
+
+	return $selector;
+}
+
+/**
+ * Evaluate rendered page context for a post/page.
+ *
+ * @param int $post_id Post ID.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_evaluate_render_context( int $post_id ) {
+	$post = mcp_abilities_gutenberg_get_editable_post( $post_id );
+	if ( is_wp_error( $post ) ) {
+		return $post;
+	}
+
+	$url = get_permalink( $post );
+	if ( ! is_string( $url ) || '' === $url ) {
+		return new WP_Error( 'mcp_gutenberg_render_context_missing_url', 'Could not resolve the rendered URL for this post.' );
+	}
+
+	$response = wp_remote_get(
+		$url,
+		array(
+			'timeout'     => 15,
+			'redirection' => 3,
+		)
+	);
+
+	if ( is_wp_error( $response ) ) {
+		return new WP_Error( 'mcp_gutenberg_render_context_fetch_failed', $response->get_error_message() );
+	}
+
+	$status_code = (int) wp_remote_retrieve_response_code( $response );
+	$html        = (string) wp_remote_retrieve_body( $response );
+	if ( $status_code < 200 || $status_code >= 300 || '' === $html ) {
+		return new WP_Error( 'mcp_gutenberg_render_context_bad_response', sprintf( 'Rendered page request returned HTTP %d.', $status_code ) );
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML( $html );
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return new WP_Error( 'mcp_gutenberg_render_context_parse_failed', 'Could not parse rendered page HTML.' );
+	}
+
+	$xpath        = new DOMXPath( $document );
+	$main_nodes   = $xpath->query( '//main' );
+	$entry_nodes  = $xpath->query( '//*[contains(concat(" ", normalize-space(@class), " "), " entry-content ")]' );
+	$issues       = array();
+	$observations = array(
+		'main_found'                => $main_nodes instanceof DOMNodeList && $main_nodes->length > 0,
+		'entry_content_found'       => $entry_nodes instanceof DOMNodeList && $entry_nodes->length > 0,
+		'main_child_element_count'  => 0,
+		'pre_entry_sibling_count'   => 0,
+		'leading_entry_child_tag'   => '',
+		'leading_entry_child_path'  => '',
+	);
+
+	if ( ! $observations['main_found'] ) {
+		$issues[] = array(
+			'type'     => 'missing_main',
+			'severity' => 'error',
+			'message'  => 'Rendered page is missing a <main> element.',
+		);
+	}
+
+	if ( ! $observations['entry_content_found'] ) {
+		$issues[] = array(
+			'type'     => 'missing_entry_content',
+			'severity' => 'error',
+			'message'  => 'Rendered page is missing an .entry-content wrapper.',
+		);
+	}
+
+	if ( $observations['main_found'] && $observations['entry_content_found'] ) {
+		$main          = $main_nodes->item( 0 );
+		$entry_content = $entry_nodes->item( 0 );
+
+		if ( $main instanceof DOMElement && $entry_content instanceof DOMElement ) {
+			$main_children = array();
+			foreach ( $main->childNodes as $child ) {
+				if ( $child instanceof DOMElement ) {
+					$main_children[] = $child;
+				}
+			}
+
+			$observations['main_child_element_count'] = count( $main_children );
+
+			$pre_entry_siblings = array();
+			foreach ( $main_children as $child ) {
+				if ( $child->isSameNode( $entry_content ) ) {
+					break;
+				}
+				$pre_entry_siblings[] = $child;
+			}
+
+			$observations['pre_entry_sibling_count'] = count( $pre_entry_siblings );
+
+			if ( ! empty( $pre_entry_siblings ) ) {
+				$issues[] = array(
+					'type'      => 'pre_entry_wrappers',
+					'severity'  => 'warning',
+					'count'     => count( $pre_entry_siblings ),
+					'selectors' => array_map( 'mcp_abilities_gutenberg_describe_dom_element', $pre_entry_siblings ),
+					'message'   => 'Rendered page contains wrapper elements before .entry-content inside <main>; these can create unexpected spacing or layout chrome above the first content block.',
+				);
+
+				foreach ( $pre_entry_siblings as $sibling ) {
+					if ( ! mcp_abilities_gutenberg_dom_element_has_meaningful_content( $sibling ) ) {
+						$issues[] = array(
+							'type'     => 'empty_pre_entry_wrapper',
+							'severity' => 'warning',
+							'selector' => mcp_abilities_gutenberg_describe_dom_element( $sibling ),
+							'message'  => 'An empty wrapper appears before .entry-content inside <main>; this often creates a visible gap above the hero.',
+						);
+					}
+				}
+			}
+
+			$entry_children = array();
+			foreach ( $entry_content->childNodes as $child ) {
+				if ( $child instanceof DOMElement ) {
+					$entry_children[] = $child;
+				}
+			}
+
+			if ( ! empty( $entry_children ) ) {
+				$first_child = $entry_children[0];
+				$observations['leading_entry_child_tag']  = strtolower( $first_child->tagName );
+				$observations['leading_entry_child_path'] = mcp_abilities_gutenberg_describe_dom_element( $first_child );
+
+				if ( 'style' === strtolower( $first_child->tagName ) ) {
+					$issues[] = array(
+						'type'     => 'leading_style_block',
+						'severity' => 'warning',
+						'selector' => mcp_abilities_gutenberg_describe_dom_element( $first_child ),
+						'message'  => 'The first rendered child inside .entry-content is a style block; this can interact badly with theme flow spacing ahead of the hero.',
+					);
+				}
+			}
+		}
+	}
+
+	return array(
+		'url'          => $url,
+		'status_code'  => $status_code,
+		'post'         => array(
+			'id'     => (int) $post->ID,
+			'type'   => (string) $post->post_type,
+			'status' => (string) $post->post_status,
+			'slug'   => (string) $post->post_name,
+			'title'  => get_the_title( $post ),
+		),
+		'issues'       => $issues,
+		'observations' => $observations,
 	);
 }
 
@@ -5324,6 +5540,64 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				return array(
 					'success'  => true,
 					'analysis' => mcp_abilities_gutenberg_analyze_content( $content ),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/evaluate-render-context',
+		array(
+			'label'               => 'Evaluate Gutenberg Render Context',
+			'description'         => 'Inspect the rendered page around Gutenberg post content to catch wrapper and layout-context issues such as empty pre-content wrappers or leading style blocks.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'post_id' ),
+				'properties'           => array(
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Post or page ID to fetch and inspect in rendered form.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'context' => array( 'type' => 'object' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$post_id = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
+				if ( $post_id <= 0 ) {
+					return array(
+						'success' => false,
+						'message' => 'post_id is required.',
+					);
+				}
+
+				$result = mcp_abilities_gutenberg_evaluate_render_context( $post_id );
+				if ( is_wp_error( $result ) ) {
+					return array(
+						'success' => false,
+						'message' => $result->get_error_message(),
+					);
+				}
+
+				return array(
+					'success' => true,
+					'context' => $result,
 				);
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
