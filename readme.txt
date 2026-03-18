@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.6.0
+Stable tag: 0.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,6 +19,7 @@ Included abilities:
 - `gutenberg/get-theme-context`
 - `gutenberg/get-style-guide`
 - `gutenberg/get-style-book`
+- `gutenberg/get-site-editor-summary`
 - `gutenberg/list-available-blocks`
 - `gutenberg/get-block-categories`
 - `gutenberg/get-block-details`
@@ -47,6 +48,10 @@ Included abilities:
 - `gutenberg/get-template-part`
 - `gutenberg/create-template-part`
 - `gutenberg/update-template-part`
+- `gutenberg/list-navigations`
+- `gutenberg/get-navigation`
+- `gutenberg/create-navigation`
+- `gutenberg/update-navigation`
 - `gutenberg/create-page-from-blocks`
 - `gutenberg/create-synced-pattern`
 - `gutenberg/update-synced-pattern`
@@ -71,6 +76,7 @@ This is useful when an MCP client needs to:
 
 - inspect the site block/theme/style context before authoring
 - inspect block metadata, categories, templates, and template parts
+- inspect site-editor navigation entities and theme/site-editor summary data
 - inspect block style variations and style-relevant theme support
 - discover and reuse registered patterns and synced patterns
 - choose the right Gutenberg block for a content scenario
@@ -80,6 +86,7 @@ This is useful when an MCP client needs to:
 - inspect Gutenberg content as nested blocks
 - preserve block formatting and attributes
 - create and update block templates, template parts, and synced patterns
+- create and update Gutenberg navigation entities (`wp_navigation`)
 - apply structural block transforms without dropping into raw HTML edits
 - mutate nested block trees by path and set lock / allowed-block / template-lock attributes
 - duplicate, move, and text-edit blocks without dropping into raw HTML workflows
@@ -147,3 +154,8 @@ Requires the Abilities API plugin.
 - Added `templateLock`, inner-block insertion, duplication, movement, and text-replacement helpers for direct block editing.
 - Added block-bindings inspection and update helpers.
 - Added copy evaluation heuristics for weak headings, vague CTAs, dense paragraphs, and shouty copy.
+
+= 0.7.0 =
+- Added site-editor summary output for active theme, styles, templates, parts, navigation entities, and synced patterns.
+- Added `wp_navigation` listing, retrieval, creation, and updating.
+- Kept the new site-editor coverage Gutenberg-specific and separate from the main plugin's generic content abilities.

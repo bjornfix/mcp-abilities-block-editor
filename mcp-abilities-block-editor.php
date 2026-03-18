@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.6.0
+ * Version: 0.7.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -1028,6 +1028,186 @@ function mcp_abilities_gutenberg_save_synced_pattern( array $input ): array {
 		'content' => $content,
 		'summary' => mcp_abilities_gutenberg_content_summary( $content ),
 		'blocks'  => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) ),
+	);
+}
+
+/**
+ * Return wp_navigation entities.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_get_navigation_entities(): array {
+	$posts = get_posts(
+		array(
+			'post_type'              => 'wp_navigation',
+			'post_status'            => array( 'publish', 'draft' ),
+			'posts_per_page'         => -1,
+			'orderby'                => 'title',
+			'order'                  => 'ASC',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		)
+	);
+
+	$items = array();
+	foreach ( $posts as $post ) {
+		$content = (string) $post->post_content;
+		$blocks  = mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) );
+		$items[] = array(
+			'id'          => (int) $post->ID,
+			'slug'        => (string) $post->post_name,
+			'title'       => get_the_title( $post ),
+			'status'      => (string) $post->post_status,
+			'modified'    => (string) $post->post_modified_gmt,
+			'block_count' => count( $blocks ),
+			'items'       => count( array_filter( $blocks, static fn( array $block ): bool => 'core/navigation-link' === (string) ( $block['block_name'] ?? '' ) || 'core/navigation-submenu' === (string) ( $block['block_name'] ?? '' ) ) ),
+		);
+	}
+
+	return $items;
+}
+
+/**
+ * Get a navigation entity by ID or slug.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_get_navigation_entity( array $input ) {
+	$post = null;
+	if ( isset( $input['post_id'] ) ) {
+		$post = get_post( (int) $input['post_id'] );
+	} elseif ( isset( $input['slug'] ) ) {
+		$posts = get_posts(
+			array(
+				'post_type'              => 'wp_navigation',
+				'name'                   => sanitize_title( (string) $input['slug'] ),
+				'post_status'            => array( 'publish', 'draft' ),
+				'posts_per_page'         => 1,
+				'orderby'                => 'ID',
+				'order'                  => 'ASC',
+				'no_found_rows'          => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+			)
+		);
+		$post = ! empty( $posts ) ? $posts[0] : null;
+	}
+
+	if ( ! $post instanceof WP_Post || 'wp_navigation' !== $post->post_type ) {
+		return new WP_Error( 'mcp_gutenberg_navigation_not_found', 'Navigation not found.' );
+	}
+
+	$content = (string) $post->post_content;
+	$blocks  = mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) );
+
+	return array(
+		'id'       => (int) $post->ID,
+		'slug'     => (string) $post->post_name,
+		'title'    => get_the_title( $post ),
+		'status'   => (string) $post->post_status,
+		'modified' => (string) $post->post_modified_gmt,
+		'content'  => $content,
+		'summary'  => mcp_abilities_gutenberg_content_summary( $content ),
+		'blocks'   => $blocks,
+	);
+}
+
+/**
+ * Create or update a navigation entity.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_save_navigation_entity( array $input ): array {
+	$content = null;
+	if ( isset( $input['content'] ) && is_string( $input['content'] ) ) {
+		$content = $input['content'];
+	} elseif ( isset( $input['blocks'] ) ) {
+		$blocks = mcp_abilities_gutenberg_denormalize_blocks( $input['blocks'] );
+		if ( is_wp_error( $blocks ) ) {
+			return array(
+				'success' => false,
+				'message' => $blocks->get_error_message(),
+			);
+		}
+		$content = serialize_blocks( $blocks );
+	}
+
+	if ( null === $content ) {
+		return array(
+			'success' => false,
+			'message' => 'Provide either content or blocks.',
+		);
+	}
+
+	$title   = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : 'Untitled Navigation';
+	$slug    = isset( $input['slug'] ) ? sanitize_title( (string) $input['slug'] ) : sanitize_title( $title );
+	$status  = isset( $input['status'] ) ? sanitize_text_field( (string) $input['status'] ) : 'publish';
+	$post_id = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
+
+	$postarr = array(
+		'post_type'    => 'wp_navigation',
+		'post_title'   => $title,
+		'post_name'    => $slug,
+		'post_status'  => $status,
+		'post_content' => $content,
+	);
+
+	if ( $post_id > 0 ) {
+		$post = get_post( $post_id );
+		if ( ! $post || 'wp_navigation' !== $post->post_type ) {
+			return array(
+				'success' => false,
+				'message' => 'Navigation not found.',
+			);
+		}
+		$postarr['ID'] = $post_id;
+		$result        = wp_update_post( wp_slash( $postarr ), true );
+	} else {
+		$result  = wp_insert_post( wp_slash( $postarr ), true );
+		$post_id = is_wp_error( $result ) ? 0 : (int) $result;
+	}
+
+	if ( is_wp_error( $result ) ) {
+		return array(
+			'success' => false,
+			'message' => $result->get_error_message(),
+		);
+	}
+
+	$saved = get_post( $post_id );
+
+	return array(
+		'success' => true,
+		'message' => $postarr['ID'] ?? null ? 'Navigation updated successfully.' : 'Navigation created successfully.',
+		'navigation' => array(
+			'id'       => (int) $post_id,
+			'slug'     => $saved ? (string) $saved->post_name : $slug,
+			'title'    => $saved ? get_the_title( $saved ) : $title,
+			'status'   => $saved ? (string) $saved->post_status : $status,
+			'modified' => $saved ? (string) $saved->post_modified_gmt : '',
+		),
+		'content'    => $content,
+		'summary'    => mcp_abilities_gutenberg_content_summary( $content ),
+		'blocks'     => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) ),
+	);
+}
+
+/**
+ * Return a site-editor oriented summary for the active theme.
+ *
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_get_site_editor_summary(): array {
+	return array(
+		'theme'              => mcp_abilities_gutenberg_get_theme_context(),
+		'style_book'         => mcp_abilities_gutenberg_get_style_book_summary(),
+		'template_count'     => count( mcp_abilities_gutenberg_get_template_entities( 'wp_template' ) ),
+		'template_part_count'=> count( mcp_abilities_gutenberg_get_template_entities( 'wp_template_part' ) ),
+		'navigation_count'   => count( mcp_abilities_gutenberg_get_navigation_entities() ),
+		'synced_pattern_count' => count( mcp_abilities_gutenberg_get_synced_patterns() ),
 	);
 }
 
@@ -3112,6 +3292,42 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 	);
 
 	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-site-editor-summary',
+		array(
+			'label'               => 'Get Site Editor Summary',
+			'description'         => 'Return a site-editor oriented summary of the active block theme, style-book data, templates, parts, navigation entities, and synced patterns.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(),
+				'default'              => array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'summary' => array( 'type' => 'object' ),
+				),
+			),
+			'execute_callback'    => function (): array {
+				return array(
+					'success' => true,
+					'summary' => mcp_abilities_gutenberg_get_site_editor_summary(),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/list-available-blocks',
 		array(
 			'label'               => 'List Available Blocks',
@@ -4570,6 +4786,194 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_save_template_entity( 'wp_template_part', is_array( $input ) ? $input : array() );
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/list-navigations',
+		array(
+			'label'               => 'List Navigation Entities',
+			'description'         => 'Return `wp_navigation` entities available to the site editor.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(),
+				'default'              => array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'     => array( 'type' => 'boolean' ),
+					'navigations' => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function (): array {
+				return array(
+					'success'     => true,
+					'navigations' => mcp_abilities_gutenberg_get_navigation_entities(),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-navigation',
+		array(
+			'label'               => 'Get Navigation Entity',
+			'description'         => 'Return a `wp_navigation` entity with raw content and normalized blocks.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Navigation post ID.',
+					),
+					'slug' => array(
+						'type'        => 'string',
+						'description' => 'Navigation slug.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'    => array( 'type' => 'boolean' ),
+					'navigation' => array( 'type' => 'object' ),
+					'message'    => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$navigation = mcp_abilities_gutenberg_get_navigation_entity( is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $navigation ) ) {
+					return array(
+						'success' => false,
+						'message' => $navigation->get_error_message(),
+					);
+				}
+
+				return array(
+					'success'    => true,
+					'navigation' => $navigation,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/create-navigation',
+		array(
+			'label'               => 'Create Navigation Entity',
+			'description'         => 'Create a `wp_navigation` entity from raw content or normalized blocks.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'required'   => array( 'title' ),
+				'properties' => array(
+					'title' => array( 'type' => 'string' ),
+					'slug'  => array( 'type' => 'string' ),
+					'status' => array(
+						'type' => 'string',
+						'enum' => array( 'publish', 'draft' ),
+					),
+					'content' => array( 'type' => 'string' ),
+					'blocks'  => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'object' ),
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'    => array( 'type' => 'boolean' ),
+					'message'    => array( 'type' => 'string' ),
+					'navigation' => array( 'type' => 'object' ),
+					'content'    => array( 'type' => 'string' ),
+					'summary'    => array( 'type' => 'object' ),
+					'blocks'     => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				return mcp_abilities_gutenberg_save_navigation_entity( is_array( $input ) ? $input : array() );
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/update-navigation',
+		array(
+			'label'               => 'Update Navigation Entity',
+			'description'         => 'Update a `wp_navigation` entity from raw content or normalized blocks.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'required'   => array( 'post_id' ),
+				'properties' => array(
+					'post_id' => array( 'type' => 'integer' ),
+					'title'   => array( 'type' => 'string' ),
+					'slug'    => array( 'type' => 'string' ),
+					'status'  => array(
+						'type' => 'string',
+						'enum' => array( 'publish', 'draft' ),
+					),
+					'content' => array( 'type' => 'string' ),
+					'blocks'  => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'object' ),
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'    => array( 'type' => 'boolean' ),
+					'message'    => array( 'type' => 'string' ),
+					'navigation' => array( 'type' => 'object' ),
+					'content'    => array( 'type' => 'string' ),
+					'summary'    => array( 'type' => 'object' ),
+					'blocks'     => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				return mcp_abilities_gutenberg_save_navigation_entity( is_array( $input ) ? $input : array() );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
 			'meta'                => array(
