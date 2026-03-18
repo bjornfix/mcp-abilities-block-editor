@@ -1147,6 +1147,11 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'type'        => 'string',
 						'description' => 'Optional page slug.',
 					),
+					'status' => array(
+						'type'        => 'string',
+						'description' => 'Optional page status hint; accepted for parity with create-landing-page.',
+						'enum'        => array( 'publish', 'draft', 'pending', 'private' ),
+					),
 					'primary_cta_text' => array(
 						'type'        => 'string',
 						'description' => 'Primary button label.',
