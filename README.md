@@ -79,7 +79,7 @@ This plugin provides a round-trip workflow:
 4. Write it back to the post safely.
 
 It also provides block-choice guidance so an MCP client can pick the right block for the content instead of faking layout with paragraphs and ad hoc HTML.
-This version also adds authoring helpers for real page builds: theme/style discovery, block metadata, pattern inspection and insertion, section recipes, template and template-part inspection, deeper content analysis, and one-step page creation.
+This version also adds authoring helpers for real page builds: theme/style discovery, block metadata, pattern inspection and insertion, section recipes, template and template-part inspection, deeper content analysis, one-step page creation, and render-risk guardrails for static block mutations.
 
 ## Requirements
 
@@ -93,7 +93,7 @@ This version also adds authoring helpers for real page builds: theme/style disco
 2. Use `gutenberg/list-available-blocks`, `gutenberg/get-block-categories`, `gutenberg/get-block-details`, and `gutenberg/get-block-style-variations` to understand the site block surface.
 3. Use `gutenberg/list-patterns` and `gutenberg/get-pattern` to discover reusable pattern content.
 4. Use `gutenberg/get-page-recipes`, `gutenberg/get-section-recipes`, `gutenberg/generate-section`, or `gutenberg/generate-landing-page` to draft content.
-5. Use `gutenberg/validate-content`, `gutenberg/audit-content`, `gutenberg/evaluate-copy`, `gutenberg/suggest-copy-fixes`, and `gutenberg/analyze-content` to catch weak structure, weak writing, missing hierarchy, link/media issues, and round-trip problems.
+5. Use `gutenberg/validate-content`, `gutenberg/audit-content`, `gutenberg/evaluate-copy`, `gutenberg/suggest-copy-fixes`, and `gutenberg/analyze-content` to catch weak structure, weak writing, missing hierarchy, link/media issues, round-trip problems, and static-block mutation guardrails.
 6. Use `gutenberg/create-page-from-blocks`, `gutenberg/create-page-from-pattern`, or `gutenberg/create-landing-page` to create the page.
 7. Use `gutenberg/get-site-editor-summary`, `gutenberg/get-site-editor-references`, `gutenberg/list-templates`, `gutenberg/get-template`, `gutenberg/create-template`, `gutenberg/update-template`, `gutenberg/list-template-parts`, `gutenberg/get-template-part`, `gutenberg/list-navigations`, `gutenberg/get-navigation`, `gutenberg/find-navigation-usage`, `gutenberg/find-template-part-usage`, and `gutenberg/find-synced-pattern-usage` when the active block theme or reusable block relationships matter.
 8. Use the main plugin's generic media abilities for uploads, media lookup, and featured-image updates.
@@ -151,6 +151,7 @@ The plugin exposes blocks in a normalized shape:
 - `gutenberg/audit-content` adds Gutenberg-specific QA for heading structure, empty buttons, missing alt text, and oversized spacers.
 - `gutenberg/evaluate-copy` adds lightweight editorial heuristics for vague CTAs, generic headings, dense paragraphs, shouty copy, and readability drift.
 - `gutenberg/suggest-copy-fixes` turns those editorial issues into block-level rewrite suggestions and replacement options.
+- `gutenberg/validate-content` now reports mutation guardrails so static versus dynamic block surfaces are easier to reason about before editing.
 - `gutenberg/extract-synced-pattern` lets an MCP client promote an existing block subtree into a reusable `wp_block` pattern and optionally replace the source with a `core/block` reference.
 - `gutenberg/insert-synced-pattern-into-post` inserts true reusable pattern references into existing posts instead of flattening pattern content.
 - `gutenberg/find-synced-pattern-usage` makes reusable blocks safer by showing where a synced pattern is referenced before editing it.
@@ -158,6 +159,7 @@ The plugin exposes blocks in a normalized shape:
 - Site-editor navigation entities (`wp_navigation`) are now readable and writable from the plugin.
 - Site-editor reference analysis is now exposed so templates, parts, and navigation relationships can be inspected in both directions.
 - Lock attributes, `allowedBlocks`, `templateLock`, nested path mutations, block bindings, text replacement, and block style-variation data are now exposed directly.
+- `gutenberg/mutate-block-tree` now blocks unsafe attr-only changes on static blocks unless the caller explicitly opts in with `allow_unsafe_static_markup`.
 - Generic media management stays in the main plugin to avoid overlapping `content/*` and `media/*` abilities.
 - This version still does not handle media upload itself, deep block migrations/deprecations, or advanced site-editor rewrites like automatically updating all template references after a navigation swap.
 

@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.11.0
+ * Version: 0.12.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -246,6 +246,145 @@ function mcp_abilities_gutenberg_denormalize_blocks( $blocks ) {
 	}
 
 	return $normalized;
+}
+
+/**
+ * Return changed dotted attribute paths between two attr arrays.
+ *
+ * @param array<string,mixed> $before Before attrs.
+ * @param array<string,mixed> $after  After attrs.
+ * @return array<int,string>
+ */
+function mcp_abilities_gutenberg_get_changed_attr_paths( array $before, array $after ): array {
+	$changed = array();
+	$keys    = array_values( array_unique( array_merge( array_keys( $before ), array_keys( $after ) ) ) );
+
+	foreach ( $keys as $key ) {
+		$key_exists_before = array_key_exists( $key, $before );
+		$key_exists_after  = array_key_exists( $key, $after );
+		$key_name          = is_int( $key ) ? (string) $key : sanitize_key( (string) $key );
+
+		if ( ! $key_exists_before || ! $key_exists_after ) {
+			$changed[] = $key_name;
+			continue;
+		}
+
+		$before_value = $before[ $key ];
+		$after_value  = $after[ $key ];
+
+		if ( is_array( $before_value ) && is_array( $after_value ) ) {
+			$nested = mcp_abilities_gutenberg_get_changed_attr_paths( $before_value, $after_value );
+			foreach ( $nested as $nested_key ) {
+				$changed[] = $key_name . '.' . $nested_key;
+			}
+			continue;
+		}
+
+		if ( $before_value !== $after_value ) {
+			$changed[] = $key_name;
+		}
+	}
+
+	return array_values( array_unique( $changed ) );
+}
+
+/**
+ * Determine whether an attr path is editor-only and safe without static markup regeneration.
+ *
+ * @param string $path Dotted attr path.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_is_editor_only_attr_path( string $path ): bool {
+	$editor_only_roots = array(
+		'lock',
+		'templateLock',
+		'allowedBlocks',
+		'metadata',
+	);
+
+	foreach ( $editor_only_roots as $root ) {
+		if ( $path === $root || str_starts_with( $path, $root . '.' ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Check whether a registered block type is dynamic.
+ *
+ * @param string $block_name Block name.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_is_dynamic_block_type( string $block_name ): bool {
+	if ( '' === $block_name || ! class_exists( 'WP_Block_Type_Registry' ) ) {
+		return false;
+	}
+
+	$registry   = WP_Block_Type_Registry::get_instance();
+	$block_type = $registry->is_registered( $block_name ) ? $registry->get_registered( $block_name ) : null;
+	if ( ! $block_type ) {
+		return false;
+	}
+
+	if ( method_exists( $block_type, 'is_dynamic' ) ) {
+		return (bool) $block_type->is_dynamic();
+	}
+
+	return is_callable( $block_type->render_callback ?? null );
+}
+
+/**
+ * Evaluate whether a static block attr change can leave saved markup stale.
+ *
+ * @param array<string,mixed>   $before Before normalized block.
+ * @param array<string,mixed>   $after  After normalized block.
+ * @param array<int,int|string> $path   Block path.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_get_static_render_risks_for_block( array $before, array $after, array $path ): array {
+	$before_name = isset( $before['block_name'] ) ? (string) $before['block_name'] : '';
+	$after_name  = isset( $after['block_name'] ) ? (string) $after['block_name'] : '';
+	if ( '' === $after_name || $before_name !== $after_name ) {
+		return array();
+	}
+
+	if ( mcp_abilities_gutenberg_is_dynamic_block_type( $after_name ) ) {
+		return array();
+	}
+
+	$before_attrs = isset( $before['attrs'] ) && is_array( $before['attrs'] ) ? $before['attrs'] : array();
+	$after_attrs  = isset( $after['attrs'] ) && is_array( $after['attrs'] ) ? $after['attrs'] : array();
+	$changed      = mcp_abilities_gutenberg_get_changed_attr_paths( $before_attrs, $after_attrs );
+	if ( empty( $changed ) ) {
+		return array();
+	}
+
+	$risky = array_values(
+		array_filter(
+			$changed,
+			static function ( string $attr_path ): bool {
+				return ! mcp_abilities_gutenberg_is_editor_only_attr_path( $attr_path );
+			}
+		)
+	);
+
+	if ( empty( $risky ) ) {
+		return array();
+	}
+
+	return array(
+		array(
+			'type'              => 'static_markup_stale_risk',
+			'severity'          => 'error',
+			'path'              => array_values( $path ),
+			'block_name'        => $after_name,
+			'changed_attrs'     => $risky,
+			'editor_only_attrs' => array_values( array_diff( $changed, $risky ) ),
+			'message'           => 'Static block attrs changed without regenerating saved HTML; frontend rendering may stay stale.',
+		),
+	);
 }
 
 /**
@@ -2738,6 +2877,10 @@ function mcp_abilities_gutenberg_mutate_block_tree( array $input ) {
 
 	$normalized = mcp_abilities_gutenberg_normalize_blocks( $blocks );
 	$operation  = isset( $input['operation'] ) ? sanitize_key( (string) $input['operation'] ) : '';
+	$before     = mcp_abilities_gutenberg_get_block_by_path( $normalized, $path );
+	if ( is_wp_error( $before ) ) {
+		return $before;
+	}
 
 	$mutated = mcp_abilities_gutenberg_mutate_blocks_at_path(
 		$normalized,
@@ -2768,6 +2911,28 @@ function mcp_abilities_gutenberg_mutate_block_tree( array $input ) {
 		return $mutated;
 	}
 
+	$after        = mcp_abilities_gutenberg_get_block_by_path( $mutated, $path );
+	$render_risks = array();
+	if ( ! is_wp_error( $after ) && 'update-attrs' === $operation ) {
+		$render_risks = mcp_abilities_gutenberg_get_static_render_risks_for_block( $before, $after, $path );
+	}
+
+	if ( ! empty( $render_risks ) && empty( $input['allow_unsafe_static_markup'] ) ) {
+		$first_risk = $render_risks[0];
+		return new WP_Error(
+			'mcp_gutenberg_static_render_risk',
+			sprintf(
+				'Unsafe static block attr mutation detected for %1$s at path [%2$s]; changed attrs: %3$s. Pass allow_unsafe_static_markup=true only if you will regenerate the saved markup separately.',
+				(string) ( $first_risk['block_name'] ?? 'block' ),
+				implode( ',', array_map( 'strval', $path ) ),
+				implode( ', ', array_map( 'strval', $first_risk['changed_attrs'] ?? array() ) )
+			),
+			array(
+				'render_risks' => $render_risks,
+			)
+		);
+	}
+
 	$denormalized = mcp_abilities_gutenberg_denormalize_blocks( $mutated );
 	if ( is_wp_error( $denormalized ) ) {
 		return $denormalized;
@@ -2781,6 +2946,8 @@ function mcp_abilities_gutenberg_mutate_block_tree( array $input ) {
 		'content'   => $content,
 		'summary'   => mcp_abilities_gutenberg_content_summary( $content ),
 		'blocks'    => $mutated,
+		'render_risks' => $render_risks,
+		'render_safe'  => empty( $render_risks ),
 	);
 }
 
@@ -3412,6 +3579,17 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	}
 
 	$all_block_names = mcp_abilities_gutenberg_collect_block_names( $normalized );
+	$static_block_names = array();
+	$dynamic_block_names = array();
+	foreach ( $all_block_names as $block_name ) {
+		if ( mcp_abilities_gutenberg_is_dynamic_block_type( $block_name ) ) {
+			$dynamic_block_names[] = $block_name;
+		} else {
+			$static_block_names[] = $block_name;
+		}
+	}
+	$static_block_names  = array_values( array_unique( $static_block_names ) );
+	$dynamic_block_names = array_values( array_unique( $dynamic_block_names ) );
 
 	$warnings = array();
 	if ( empty( $normalized ) ) {
@@ -3426,14 +3604,23 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	if ( count( $normalized ) < 3 ) {
 		$warnings[] = 'Very few top-level blocks; page structure may be too shallow for a landing page.';
 	}
+	if ( ! empty( $static_block_names ) ) {
+		$warnings[] = 'Static blocks are present; attr-only mutations may require saved markup regeneration to affect frontend rendering.';
+	}
 
 	return array(
 		'summary'                 => mcp_abilities_gutenberg_content_summary( $content ),
 		'roundtrip_equal'         => $normalized === $roundtrip_normalized,
 		'all_block_names'         => $all_block_names,
+		'static_block_names'      => $static_block_names,
+		'dynamic_block_names'     => $dynamic_block_names,
 		'top_level_block_names'   => $top_level_names,
 		'top_level_block_count'   => count( $normalized ),
 		'warnings'                => $warnings,
+		'mutation_guardrails'     => array(
+			'static_attr_changes_require_markup_regeneration' => ! empty( $static_block_names ),
+			'editor_only_attr_paths'                          => array( 'lock', 'templateLock', 'allowedBlocks', 'metadata' ),
+		),
 	);
 }
 
@@ -6624,6 +6811,10 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'type'        => 'object',
 						'description' => 'Replacement block for replace-block.',
 					),
+					'allow_unsafe_static_markup' => array(
+						'type'        => 'boolean',
+						'description' => 'Allow attr changes on static blocks even when saved HTML may go stale. Use only if markup will be regenerated separately.',
+					),
 				),
 				'additionalProperties' => false,
 			),
@@ -6636,16 +6827,24 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'content'   => array( 'type' => 'string' ),
 					'summary'   => array( 'type' => 'object' ),
 					'blocks'    => array( 'type' => 'array' ),
+					'render_risks' => array( 'type' => 'array' ),
+					'render_safe'  => array( 'type' => 'boolean' ),
 					'message'   => array( 'type' => 'string' ),
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_mutate_block_tree( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
+					$response = array(
 						'success' => false,
 						'message' => $result->get_error_message(),
 					);
+					$error_data = $result->get_error_data();
+					if ( is_array( $error_data ) && isset( $error_data['render_risks'] ) && is_array( $error_data['render_risks'] ) ) {
+						$response['render_risks'] = $error_data['render_risks'];
+						$response['render_safe']  = false;
+					}
+					return $response;
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
