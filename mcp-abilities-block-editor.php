@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.7.0
+ * Version: 0.8.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -1209,6 +1209,155 @@ function mcp_abilities_gutenberg_get_site_editor_summary(): array {
 		'template_part_count'=> count( mcp_abilities_gutenberg_get_template_entities( 'wp_template_part' ) ),
 		'navigation_count'   => count( mcp_abilities_gutenberg_get_navigation_entities() ),
 		'synced_pattern_count' => count( mcp_abilities_gutenberg_get_synced_patterns() ),
+	);
+}
+
+/**
+ * Collect site-editor references from a block tree.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ * @param string                         $source_type Source entity type.
+ * @param int                            $source_id Source entity ID.
+ * @param string                         $source_slug Source entity slug.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_site_editor_references( array $blocks, string $source_type, int $source_id, string $source_slug ): array {
+	$references = array();
+
+	$walker = static function ( array $nodes ) use ( &$walker, &$references, $source_type, $source_id, $source_slug ): void {
+		foreach ( $nodes as $node ) {
+			$name  = isset( $node['block_name'] ) ? (string) $node['block_name'] : '';
+			$attrs = isset( $node['attrs'] ) && is_array( $node['attrs'] ) ? $node['attrs'] : array();
+
+			if ( 'core/template-part' === $name ) {
+				$references[] = array(
+					'kind'         => 'template_part',
+					'source_type'  => $source_type,
+					'source_id'    => $source_id,
+					'source_slug'  => $source_slug,
+					'block_name'   => $name,
+					'target_slug'  => isset( $attrs['slug'] ) ? (string) $attrs['slug'] : '',
+					'target_theme' => isset( $attrs['theme'] ) ? (string) $attrs['theme'] : '',
+					'target_area'  => isset( $attrs['area'] ) ? (string) $attrs['area'] : '',
+					'attrs'        => $attrs,
+				);
+			}
+
+			if ( 'core/navigation' === $name ) {
+				$references[] = array(
+					'kind'         => 'navigation',
+					'source_type'  => $source_type,
+					'source_id'    => $source_id,
+					'source_slug'  => $source_slug,
+					'block_name'   => $name,
+					'target_ref'   => isset( $attrs['ref'] ) ? (int) $attrs['ref'] : 0,
+					'target_slug'  => isset( $attrs['slug'] ) ? (string) $attrs['slug'] : '',
+					'attrs'        => $attrs,
+				);
+			}
+
+			if ( ! empty( $node['inner_blocks'] ) && is_array( $node['inner_blocks'] ) ) {
+				$walker( $node['inner_blocks'] );
+			}
+		}
+	};
+
+	$walker( $blocks );
+
+	return $references;
+}
+
+/**
+ * Return a site-editor reference graph for templates and template parts.
+ *
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_get_site_editor_reference_graph(): array {
+	$entities = array_merge(
+		mcp_abilities_gutenberg_get_template_entities( 'wp_template' ),
+		mcp_abilities_gutenberg_get_template_entities( 'wp_template_part' )
+	);
+
+	$references = array();
+	foreach ( $entities as $entity ) {
+		$post_id = isset( $entity['id'] ) ? (int) $entity['id'] : 0;
+		$type    = isset( $entity['type'] ) ? (string) $entity['type'] : '';
+		$slug    = isset( $entity['slug'] ) ? (string) $entity['slug'] : '';
+		if ( $post_id <= 0 || '' === $type ) {
+			continue;
+		}
+
+		$full = mcp_abilities_gutenberg_get_template_entity( $type, array( 'post_id' => $post_id ) );
+		if ( is_wp_error( $full ) ) {
+			continue;
+		}
+
+		$blocks = is_array( $full['blocks'] ?? null ) ? $full['blocks'] : array();
+		$references = array_merge(
+			$references,
+			mcp_abilities_gutenberg_collect_site_editor_references( $blocks, $type, $post_id, $slug )
+		);
+	}
+
+	return array(
+		'entity_count'    => count( $entities ),
+		'reference_count' => count( $references ),
+		'references'      => $references,
+	);
+}
+
+/**
+ * Find navigation usage across templates and template parts.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_find_navigation_usage( array $input ) {
+	$graph      = mcp_abilities_gutenberg_get_site_editor_reference_graph();
+	$references = is_array( $graph['references'] ?? null ) ? $graph['references'] : array();
+	$navigation = null;
+
+	if ( isset( $input['post_id'] ) ) {
+		$navigation = mcp_abilities_gutenberg_get_navigation_entity(
+			array(
+				'post_id' => (int) $input['post_id'],
+			)
+		);
+	} elseif ( isset( $input['slug'] ) ) {
+		$navigation = mcp_abilities_gutenberg_get_navigation_entity(
+			array(
+				'slug' => (string) $input['slug'],
+			)
+		);
+	}
+
+	if ( is_wp_error( $navigation ) ) {
+		return $navigation;
+	}
+
+	$target_id   = is_array( $navigation ) ? (int) ( $navigation['id'] ?? 0 ) : 0;
+	$target_slug = is_array( $navigation ) ? (string) ( $navigation['slug'] ?? '' ) : '';
+
+	$matches = array_values(
+		array_filter(
+			$references,
+			static function ( array $reference ) use ( $target_id, $target_slug ): bool {
+				if ( 'navigation' !== (string) ( $reference['kind'] ?? '' ) ) {
+					return false;
+				}
+
+				$ref_id   = isset( $reference['target_ref'] ) ? (int) $reference['target_ref'] : 0;
+				$ref_slug = isset( $reference['target_slug'] ) ? (string) $reference['target_slug'] : '';
+
+				return ( $target_id > 0 && $ref_id === $target_id ) || ( '' !== $target_slug && $ref_slug === $target_slug );
+			}
+		)
+	);
+
+	return array(
+		'navigation' => $navigation,
+		'matches'    => $matches,
+		'match_count'=> count( $matches ),
 	);
 }
 
@@ -3329,6 +3478,42 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 	);
 
 	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-site-editor-references',
+		array(
+			'label'               => 'Get Site Editor References',
+			'description'         => 'Return a reference graph for templates and template parts, including navigation and template-part block references.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(),
+				'default'              => array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'graph'   => array( 'type' => 'object' ),
+				),
+			),
+			'execute_callback'    => function (): array {
+				return array(
+					'success' => true,
+					'graph'   => mcp_abilities_gutenberg_get_site_editor_reference_graph(),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/list-available-blocks',
 		array(
 			'label'               => 'List Available Blocks',
@@ -4982,6 +5167,59 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'readonly'    => false,
 					'destructive' => false,
 					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/find-navigation-usage',
+		array(
+			'label'               => 'Find Navigation Usage',
+			'description'         => 'Find which templates or template parts reference a target navigation entity.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Navigation post ID.',
+					),
+					'slug' => array(
+						'type'        => 'string',
+						'description' => 'Navigation slug.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'    => array( 'type' => 'boolean' ),
+					'usage'      => array( 'type' => 'object' ),
+					'message'    => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$usage = mcp_abilities_gutenberg_find_navigation_usage( is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $usage ) ) {
+					return array(
+						'success' => false,
+						'message' => $usage->get_error_message(),
+					);
+				}
+
+				return array(
+					'success' => true,
+					'usage'   => $usage,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
 				),
 			),
 		)
