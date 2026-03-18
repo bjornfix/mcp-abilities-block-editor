@@ -1371,6 +1371,8 @@ function mcp_abilities_gutenberg_find_template_part_usage( array $input ) {
 	$graph      = mcp_abilities_gutenberg_get_site_editor_reference_graph();
 	$references = is_array( $graph['references'] ?? null ) ? $graph['references'] : array();
 	$template_part = null;
+	$target_slug   = isset( $input['slug'] ) ? sanitize_title( (string) $input['slug'] ) : '';
+	$target_theme  = isset( $input['theme'] ) ? sanitize_key( (string) $input['theme'] ) : '';
 
 	if ( isset( $input['post_id'] ) ) {
 		$template_part = mcp_abilities_gutenberg_get_template_entity(
@@ -1383,17 +1385,19 @@ function mcp_abilities_gutenberg_find_template_part_usage( array $input ) {
 		$template_part = mcp_abilities_gutenberg_get_template_entity(
 			'wp_template_part',
 			array(
-				'slug' => (string) $input['slug'],
+				'slug' => $target_slug,
 			)
 		);
 	}
 
-	if ( is_wp_error( $template_part ) ) {
+	if ( is_wp_error( $template_part ) && '' === $target_slug ) {
 		return $template_part;
 	}
 
-	$target_slug  = is_array( $template_part ) ? (string) ( $template_part['slug'] ?? '' ) : '';
-	$target_theme = is_array( $template_part ) ? (string) ( $template_part['theme'] ?? '' ) : '';
+	if ( is_array( $template_part ) ) {
+		$target_slug  = (string) ( $template_part['slug'] ?? $target_slug );
+		$target_theme = (string) ( $template_part['theme'] ?? $target_theme );
+	}
 
 	$matches = array_values(
 		array_filter(
@@ -1416,7 +1420,10 @@ function mcp_abilities_gutenberg_find_template_part_usage( array $input ) {
 	);
 
 	return array(
-		'template_part' => $template_part,
+		'template_part' => is_wp_error( $template_part ) ? array(
+			'slug'  => $target_slug,
+			'theme' => $target_theme,
+		) : $template_part,
 		'matches'       => $matches,
 		'match_count'   => count( $matches ),
 	);
