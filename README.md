@@ -114,3 +114,10 @@ The plugin exposes blocks in a normalized shape:
 - `gutenberg/create-page-from-pattern` and `gutenberg/insert-pattern-into-post` expose pattern content as a writable workflow, not just discovery.
 - `gutenberg/analyze-content` adds outline, link, media-reference, and block-usage analysis on top of basic validation.
 - This version still does not handle media upload itself, advanced block transforms/migrations, or deep theme-intelligence beyond the currently active block/theme registries.
+
+## Current Gaps
+
+- Media upload and attachment-creation flows are still outside the plugin.
+- Pattern insertion currently works at the whole-pattern level, not block-by-block merge granularity.
+- Section generation covers common marketing sections, but not the full long-tail of pricing, team, map, timeline, or interactive layouts yet.
+- Template inspection is read-only in this version; template writing and synchronization are not exposed.
