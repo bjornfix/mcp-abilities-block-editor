@@ -597,7 +597,6 @@ function mcp_abilities_gutenberg_find_page_by_slug( string $slug ) {
 			'posts_per_page'         => 1,
 			'orderby'                => 'ID',
 			'order'                  => 'ASC',
-			'suppress_filters'       => true,
 			'ignore_sticky_posts'    => true,
 			'no_found_rows'          => true,
 			'update_post_meta_cache' => false,
