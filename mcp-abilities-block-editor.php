@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.10.0
+ * Version: 0.11.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -1675,6 +1675,147 @@ function mcp_abilities_gutenberg_find_template_part_usage( array $input ) {
 }
 
 /**
+ * Collect synced-pattern references from a block tree.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ * @param string                         $source_type Source entity type.
+ * @param int                            $source_id Source entity ID.
+ * @param string                         $source_slug Source entity slug.
+ * @param string                         $source_title Source entity title.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_synced_pattern_references( array $blocks, string $source_type, int $source_id, string $source_slug, string $source_title ): array {
+	$references = array();
+
+	$walker = static function ( array $nodes, array $path = array() ) use ( &$walker, &$references, $source_type, $source_id, $source_slug, $source_title ): void {
+		foreach ( $nodes as $index => $node ) {
+			$current_path = array_merge( $path, array( $index ) );
+			$name         = isset( $node['block_name'] ) ? (string) $node['block_name'] : '';
+			$attrs        = isset( $node['attrs'] ) && is_array( $node['attrs'] ) ? $node['attrs'] : array();
+
+			if ( 'core/block' === $name ) {
+				$references[] = array(
+					'kind'         => 'synced_pattern',
+					'source_type'  => $source_type,
+					'source_id'    => $source_id,
+					'source_slug'  => $source_slug,
+					'source_title' => $source_title,
+					'block_name'   => $name,
+					'path'         => $current_path,
+					'target_ref'   => isset( $attrs['ref'] ) ? (int) $attrs['ref'] : 0,
+					'attrs'        => $attrs,
+				);
+			}
+
+			if ( ! empty( $node['inner_blocks'] ) && is_array( $node['inner_blocks'] ) ) {
+				$walker( $node['inner_blocks'], $current_path );
+			}
+		}
+	};
+
+	$walker( $blocks );
+
+	return $references;
+}
+
+/**
+ * Return a synced-pattern reference graph across common block entities.
+ *
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_get_synced_pattern_reference_graph(): array {
+	$post_types = array( 'page', 'post', 'wp_template', 'wp_template_part', 'wp_navigation' );
+	$posts      = get_posts(
+		array(
+			'post_type'              => $post_types,
+			'post_status'            => array( 'publish', 'draft' ),
+			'posts_per_page'         => -1,
+			'orderby'                => 'ID',
+			'order'                  => 'ASC',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		)
+	);
+
+	$references = array();
+	foreach ( $posts as $post ) {
+		$content = (string) $post->post_content;
+		if ( '' === $content || false === strpos( $content, '<!-- wp:block' ) ) {
+			continue;
+		}
+
+		$blocks = mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) );
+		$references = array_merge(
+			$references,
+			mcp_abilities_gutenberg_collect_synced_pattern_references(
+				$blocks,
+				(string) $post->post_type,
+				(int) $post->ID,
+				(string) $post->post_name,
+				get_the_title( $post )
+			)
+		);
+	}
+
+	return array(
+		'entity_count'    => count( $posts ),
+		'reference_count' => count( $references ),
+		'references'      => $references,
+	);
+}
+
+/**
+ * Find synced-pattern usage across posts, pages, templates, parts, and navigations.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_find_synced_pattern_usage( array $input ) {
+	$graph      = mcp_abilities_gutenberg_get_synced_pattern_reference_graph();
+	$references = is_array( $graph['references'] ?? null ) ? $graph['references'] : array();
+	$pattern    = null;
+
+	if ( isset( $input['post_id'] ) ) {
+		$pattern = mcp_abilities_gutenberg_get_synced_pattern(
+			array(
+				'post_id' => (int) $input['post_id'],
+			)
+		);
+	} elseif ( isset( $input['slug'] ) ) {
+		$pattern = mcp_abilities_gutenberg_get_synced_pattern(
+			array(
+				'slug' => (string) $input['slug'],
+			)
+		);
+	}
+
+	if ( is_wp_error( $pattern ) ) {
+		return $pattern;
+	}
+
+	$target_id = is_array( $pattern ) ? (int) ( $pattern['id'] ?? 0 ) : 0;
+	if ( $target_id <= 0 ) {
+		return new WP_Error( 'mcp_gutenberg_synced_pattern_not_found', 'Synced pattern not found.' );
+	}
+
+	$matches = array_values(
+		array_filter(
+			$references,
+			static function ( array $reference ) use ( $target_id ): bool {
+				return 'synced_pattern' === (string) ( $reference['kind'] ?? '' ) && (int) ( $reference['target_ref'] ?? 0 ) === $target_id;
+			}
+		)
+	);
+
+	return array(
+		'pattern'     => $pattern,
+		'matches'     => $matches,
+		'match_count' => count( $matches ),
+	);
+}
+
+/**
  * Return compact media catalog data.
  *
  * @param array<string,mixed> $input Input query options.
@@ -3073,6 +3214,36 @@ function mcp_abilities_gutenberg_get_section_recipes(): array {
 			'description' => 'Closing conversion section with button and support text.',
 			'blocks'      => array( 'core/group', 'core/heading', 'core/paragraph', 'core/buttons' ),
 		),
+		array(
+			'slug'        => 'pricing',
+			'label'       => 'Pricing',
+			'description' => 'Tiered or package pricing cards with pricing and supporting details.',
+			'blocks'      => array( 'core/group', 'core/columns', 'core/heading', 'core/paragraph', 'core/list', 'core/buttons' ),
+		),
+		array(
+			'slug'        => 'team',
+			'label'       => 'Team',
+			'description' => 'Team profile cards with names, roles, and short bios.',
+			'blocks'      => array( 'core/group', 'core/columns', 'core/heading', 'core/paragraph' ),
+		),
+		array(
+			'slug'        => 'timeline',
+			'label'       => 'Timeline',
+			'description' => 'Sequential milestones or process steps.',
+			'blocks'      => array( 'core/group', 'core/heading', 'core/list', 'core/paragraph' ),
+		),
+		array(
+			'slug'        => 'gallery',
+			'label'       => 'Gallery',
+			'description' => 'Visual showcase section with image placeholders and captions.',
+			'blocks'      => array( 'core/group', 'core/gallery', 'core/image', 'core/paragraph', 'core/heading' ),
+		),
+		array(
+			'slug'        => 'contact-map',
+			'label'       => 'Contact & Map',
+			'description' => 'Visit/contact section with address details and a map placeholder.',
+			'blocks'      => array( 'core/columns', 'core/heading', 'core/paragraph', 'core/list', 'core/buttons', 'core/embed' ),
+		),
 	);
 }
 
@@ -3141,6 +3312,71 @@ function mcp_abilities_gutenberg_generate_section_payload( array $input ) {
 				. mcp_abilities_gutenberg_paragraph_block( $body )
 				. '<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
 				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'pricing':
+			$columns = '';
+			foreach ( array_slice( $items, 0, 3 ) as $index => $item ) {
+				$price = '$' . (string) ( 12 + ( $index * 8 ) );
+				$columns .= '<!-- wp:column --><div class="wp-block-column"><!-- wp:group {"style":{"spacing":{"padding":{"top":"1.5rem","right":"1.5rem","bottom":"1.5rem","left":"1.5rem"},"blockGap":"0.75rem"},"border":{"radius":"18px","width":"1px"}},"layout":{"type":"constrained"}} --><div class="wp-block-group" style="border-width:1px;border-radius:18px;padding-top:1.5rem;padding-right:1.5rem;padding-bottom:1.5rem;padding-left:1.5rem">'
+					. mcp_abilities_gutenberg_heading_block( $item, 3 )
+					. mcp_abilities_gutenberg_paragraph_block( $price, array( 'fontSize' => 'large' ) )
+					. '<!-- wp:list --><ul><li>' . esc_html( $body ) . '</li><li>Flexible package details</li><li>Clear next step</li></ul><!-- /wp:list -->'
+					. '<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
+					. '</div><!-- /wp:group --></div><!-- /wp:column -->';
+			}
+			$content = '<!-- wp:group {"layout":{"type":"constrained"},"style":{"spacing":{"blockGap":"1rem"}}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. mcp_abilities_gutenberg_paragraph_block( $body )
+				. '<!-- wp:columns --><div class="wp-block-columns">' . $columns . '</div><!-- /wp:columns -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'team':
+			$columns = '';
+			foreach ( array_slice( $items, 0, 4 ) as $member ) {
+				$columns .= '<!-- wp:column --><div class="wp-block-column"><!-- wp:group {"style":{"spacing":{"padding":{"top":"1.25rem","right":"1.25rem","bottom":"1.25rem","left":"1.25rem"},"blockGap":"0.5rem"},"border":{"radius":"16px"}},"backgroundColor":"base-2","layout":{"type":"constrained"}} --><div class="wp-block-group has-base-2-background-color has-background" style="border-radius:16px;padding-top:1.25rem;padding-right:1.25rem;padding-bottom:1.25rem;padding-left:1.25rem">'
+					. mcp_abilities_gutenberg_heading_block( $member, 3 )
+					. mcp_abilities_gutenberg_paragraph_block( 'Role or specialty' )
+					. mcp_abilities_gutenberg_paragraph_block( $body )
+					. '</div><!-- /wp:group --></div><!-- /wp:column -->';
+			}
+			$content = '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. '<!-- wp:columns --><div class="wp-block-columns">' . $columns . '</div><!-- /wp:columns -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'timeline':
+			$list_items = '';
+			foreach ( array_slice( $items, 0, 6 ) as $item ) {
+				$list_items .= '<li><strong>' . esc_html( $item ) . '</strong>: ' . esc_html( $body ) . '</li>';
+			}
+			$content = '<!-- wp:group {"layout":{"type":"constrained"},"style":{"spacing":{"blockGap":"1rem"}}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. '<!-- wp:list --><ul>' . $list_items . '</ul><!-- /wp:list -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'gallery':
+			$images = '';
+			foreach ( array_slice( $items, 0, 3 ) as $item ) {
+				$images .= '<!-- wp:image {"sizeSlug":"large","linkDestination":"none"} --><figure class="wp-block-image size-large"><img alt="' . esc_attr( $item ) . '"/><figcaption>' . esc_html( $item ) . '</figcaption></figure><!-- /wp:image -->';
+			}
+			$content = '<!-- wp:group {"layout":{"type":"constrained"},"style":{"spacing":{"blockGap":"1rem"}}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. mcp_abilities_gutenberg_paragraph_block( $body )
+				. '<!-- wp:gallery {"linkTo":"none"} --><figure class="wp-block-gallery has-nested-images columns-3 is-cropped">' . $images . '</figure><!-- /wp:gallery -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'contact-map':
+			$content = '<!-- wp:columns {"verticalAlignment":"top"} --><div class="wp-block-columns are-vertically-aligned-top"><!-- wp:column {"verticalAlignment":"top"} --><div class="wp-block-column is-vertically-aligned-top">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. mcp_abilities_gutenberg_paragraph_block( $body )
+				. '<!-- wp:list --><ul><li>Address line placeholder</li><li>Opening hours placeholder</li><li>Phone or email placeholder</li></ul><!-- /wp:list -->'
+				. '<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
+				. '</div><!-- /wp:column --><!-- wp:column {"verticalAlignment":"top"} --><div class="wp-block-column is-vertically-aligned-top"><!-- wp:embed {"providerNameSlug":"wordpress","responsive":true,"className":"is-provider-wordpress wp-block-embed is-provider-wordpress is-type-rich is-responsive"} --><figure class="wp-block-embed is-provider-wordpress wp-block-embed is-type-rich is-responsive"><div class="wp-block-embed__wrapper">https://maps.example.com/location-placeholder</div></figure><!-- /wp:embed --></div><!-- /wp:column --></div><!-- /wp:columns -->';
 			break;
 
 		default:
@@ -4514,7 +4750,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		'gutenberg/generate-section',
 		array(
 			'label'               => 'Generate Section Blocks',
-			'description'         => 'Generate a reusable Gutenberg section such as a hero, feature list, FAQ, testimonial, stats row, or final CTA.',
+			'description'         => 'Generate a reusable Gutenberg section such as a hero, feature list, FAQ, testimonial, stats row, pricing table, team grid, timeline, gallery, contact-map, or final CTA.',
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -4523,7 +4759,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'section' => array(
 						'type'        => 'string',
 						'description' => 'Section recipe slug.',
-						'enum'        => array( 'hero', 'feature-list', 'faq', 'testimonial', 'stats', 'final-cta' ),
+						'enum'        => array( 'hero', 'feature-list', 'faq', 'testimonial', 'stats', 'pricing', 'team', 'timeline', 'gallery', 'contact-map', 'final-cta' ),
 					),
 					'title' => array(
 						'type'        => 'string',
@@ -5741,6 +5977,59 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				$usage = mcp_abilities_gutenberg_find_template_part_usage( is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $usage ) ) {
+					return array(
+						'success' => false,
+						'message' => $usage->get_error_message(),
+					);
+				}
+
+				return array(
+					'success' => true,
+					'usage'   => $usage,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/find-synced-pattern-usage',
+		array(
+			'label'               => 'Find Synced Pattern Usage',
+			'description'         => 'Find which posts, pages, templates, template parts, or navigation entities reference a target synced pattern.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Synced pattern post ID.',
+					),
+					'slug' => array(
+						'type'        => 'string',
+						'description' => 'Synced pattern slug.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'usage'   => array( 'type' => 'object' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$usage = mcp_abilities_gutenberg_find_synced_pattern_usage( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $usage ) ) {
 					return array(
 						'success' => false,

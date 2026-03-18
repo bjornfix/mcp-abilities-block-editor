@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.10.0
+Stable tag: 0.11.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,7 @@ Included abilities:
 - `gutenberg/update-navigation`
 - `gutenberg/find-navigation-usage`
 - `gutenberg/find-template-part-usage`
+- `gutenberg/find-synced-pattern-usage`
 - `gutenberg/create-page-from-blocks`
 - `gutenberg/create-synced-pattern`
 - `gutenberg/update-synced-pattern`
@@ -84,11 +85,12 @@ This is useful when an MCP client needs to:
 - inspect block metadata, categories, templates, and template parts
 - inspect site-editor navigation entities and theme/site-editor summary data
 - inspect template, template-part, and navigation reference relationships
+- inspect synced-pattern (`core/block`) reference relationships before editing reusable content
 - find reverse usage for template parts before editing shared site-editor pieces
 - inspect block style variations and style-relevant theme support
 - discover and reuse registered patterns and synced patterns
 - choose the right Gutenberg block for a content scenario
-- generate reusable sections like hero, FAQ, CTA, testimonial, and stats rows
+- generate reusable sections like hero, FAQ, CTA, testimonial, stats rows, pricing, team, timeline, gallery, and contact-map layouts
 - generate a structured landing page from business inputs
 - validate round-trip safety, page structure, outline, link/media usage, Gutenberg-specific QA issues, and copy quality
 - turn weak copy findings into block-level rewrite suggestions
@@ -180,6 +182,10 @@ Requires the Abilities API plugin.
 - Added copy-fix suggestions on top of the existing copy evaluator.
 - Added synced-pattern extraction from existing block trees.
 - Added synced-pattern insertion into posts as reusable `core/block` references.
+
+= 0.11.0 =
+- Added reverse usage lookup for synced patterns referenced as `core/block`.
+- Expanded section generation with pricing, team, timeline, gallery, and contact-map layouts.
 - Added copy evaluation heuristics for weak headings, vague CTAs, dense paragraphs, and shouty copy.
 
 = 0.7.0 =

@@ -44,6 +44,7 @@ WordPress block-editor abilities for MCP. This add-on makes Gutenberg content us
 - `gutenberg/update-navigation`
 - `gutenberg/find-navigation-usage`
 - `gutenberg/find-template-part-usage`
+- `gutenberg/find-synced-pattern-usage`
 - `gutenberg/create-page-from-blocks`
 - `gutenberg/create-synced-pattern`
 - `gutenberg/update-synced-pattern`
@@ -94,7 +95,7 @@ This version also adds authoring helpers for real page builds: theme/style disco
 4. Use `gutenberg/get-page-recipes`, `gutenberg/get-section-recipes`, `gutenberg/generate-section`, or `gutenberg/generate-landing-page` to draft content.
 5. Use `gutenberg/validate-content`, `gutenberg/audit-content`, `gutenberg/evaluate-copy`, `gutenberg/suggest-copy-fixes`, and `gutenberg/analyze-content` to catch weak structure, weak writing, missing hierarchy, link/media issues, and round-trip problems.
 6. Use `gutenberg/create-page-from-blocks`, `gutenberg/create-page-from-pattern`, or `gutenberg/create-landing-page` to create the page.
-7. Use `gutenberg/get-site-editor-summary`, `gutenberg/get-site-editor-references`, `gutenberg/list-templates`, `gutenberg/get-template`, `gutenberg/create-template`, `gutenberg/update-template`, `gutenberg/list-template-parts`, `gutenberg/get-template-part`, `gutenberg/list-navigations`, `gutenberg/get-navigation`, `gutenberg/find-navigation-usage`, and `gutenberg/find-template-part-usage` when the active block theme or site editor objects matter.
+7. Use `gutenberg/get-site-editor-summary`, `gutenberg/get-site-editor-references`, `gutenberg/list-templates`, `gutenberg/get-template`, `gutenberg/create-template`, `gutenberg/update-template`, `gutenberg/list-template-parts`, `gutenberg/get-template-part`, `gutenberg/list-navigations`, `gutenberg/get-navigation`, `gutenberg/find-navigation-usage`, `gutenberg/find-template-part-usage`, and `gutenberg/find-synced-pattern-usage` when the active block theme or reusable block relationships matter.
 8. Use the main plugin's generic media abilities for uploads, media lookup, and featured-image updates.
 9. Use `gutenberg/list-synced-patterns`, `gutenberg/get-synced-pattern`, `gutenberg/create-synced-pattern`, `gutenberg/update-synced-pattern`, `gutenberg/extract-synced-pattern`, and `gutenberg/insert-synced-pattern-into-post` for reusable block content.
 10. Use `gutenberg/get-post-blocks`, `gutenberg/insert-pattern-into-post`, `gutenberg/transform-blocks`, `gutenberg/mutate-block-tree`, `gutenberg/set-block-lock`, `gutenberg/set-allowed-blocks`, `gutenberg/set-template-lock`, `gutenberg/insert-inner-block`, `gutenberg/duplicate-block`, `gutenberg/move-block`, `gutenberg/replace-block-text`, `gutenberg/get-block-bindings`, `gutenberg/set-block-bindings`, `gutenberg/normalize-heading-levels`, and `gutenberg/update-post-blocks` to iterate safely.
@@ -152,6 +153,7 @@ The plugin exposes blocks in a normalized shape:
 - `gutenberg/suggest-copy-fixes` turns those editorial issues into block-level rewrite suggestions and replacement options.
 - `gutenberg/extract-synced-pattern` lets an MCP client promote an existing block subtree into a reusable `wp_block` pattern and optionally replace the source with a `core/block` reference.
 - `gutenberg/insert-synced-pattern-into-post` inserts true reusable pattern references into existing posts instead of flattening pattern content.
+- `gutenberg/find-synced-pattern-usage` makes reusable blocks safer by showing where a synced pattern is referenced before editing it.
 - Synced patterns (`wp_block`) and block-theme template entities are now writable from the plugin.
 - Site-editor navigation entities (`wp_navigation`) are now readable and writable from the plugin.
 - Site-editor reference analysis is now exposed so templates, parts, and navigation relationships can be inspected in both directions.
@@ -163,6 +165,6 @@ The plugin exposes blocks in a normalized shape:
 
 - Media upload and attachment-creation flows are still outside the plugin.
 - Pattern insertion currently works at the whole-pattern level, not block-by-block merge granularity.
-- Section generation covers common marketing sections, but not the full long-tail of pricing, team, map, timeline, or interactive layouts yet.
+- Section generation now covers more long-tail layouts including pricing, team, timeline, gallery, and contact-map, but it still does not cover interactive or data-driven layouts.
 - Transform support is stronger now, but still does not cover automatic Gutenberg deprecations/migrations or arbitrary semantic transforms across the full tree.
 - Navigation support now covers `wp_navigation` entities, but not every higher-level menu relationship or template reference workflow yet.
