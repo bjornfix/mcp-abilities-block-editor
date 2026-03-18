@@ -1,6 +1,6 @@
-# MCP Abilities - Gutenberg
+# MCP Abilities - Block Editor
 
-Gutenberg block-editor abilities for MCP. This add-on makes block content usable as structured data instead of fragile raw HTML strings.
+WordPress block-editor abilities for MCP. This add-on makes Gutenberg content usable as structured data instead of fragile raw HTML strings.
 
 ## What It Adds
 

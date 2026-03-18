@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: MCP Abilities - Gutenberg
- * Plugin URI: https://github.com/bjornfix/mcp-abilities-gutenberg
- * Description: Gutenberg block-editor abilities for MCP. Parse, serialize, inspect, and update block content safely.
+ * Plugin Name: MCP Abilities - Block Editor
+ * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
+ * Description: WordPress block-editor abilities for MCP. Parse, serialize, inspect, and update Gutenberg content safely.
  * Version: 0.1.0
  * Author: Devenia
  * Author URI: https://devenia.com
@@ -11,7 +11,7 @@
  * Requires at least: 6.9
  * Requires PHP: 8.0
  *
- * @package MCP_Abilities_Gutenberg
+ * @package MCP_Abilities_Block_Editor
  */
 
 declare( strict_types=1 );
@@ -28,7 +28,7 @@ function mcp_abilities_gutenberg_check_dependencies(): bool {
 		add_action(
 			'admin_notices',
 			function () {
-				echo '<div class="notice notice-error"><p><strong>MCP Abilities - Gutenberg</strong> requires the <a href="https://github.com/WordPress/abilities-api">Abilities API</a> plugin to be installed and activated.</p></div>';
+				echo '<div class="notice notice-error"><p><strong>MCP Abilities - Block Editor</strong> requires the <a href="https://github.com/WordPress/abilities-api">Abilities API</a> plugin to be installed and activated.</p></div>';
 			}
 		);
 		return false;

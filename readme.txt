@@ -1,13 +1,14 @@
-=== MCP Abilities - Gutenberg ===
+=== MCP Abilities - Block Editor ===
 Contributors: devenia
 Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
+Tested up to: 6.9.4
 Requires PHP: 8.0
 Stable tag: 0.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Gutenberg block-editor abilities for MCP. Parse, serialize, inspect, and update block content safely.
+WordPress block-editor abilities for MCP. Parse, serialize, inspect, and update Gutenberg content safely.
 
 == Description ==
 
