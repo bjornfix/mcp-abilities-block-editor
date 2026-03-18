@@ -6,6 +6,7 @@ WordPress block-editor abilities for MCP. This add-on makes Gutenberg content us
 
 - `gutenberg/get-theme-context`
 - `gutenberg/get-style-guide`
+- `gutenberg/get-style-book`
 - `gutenberg/list-available-blocks`
 - `gutenberg/get-block-categories`
 - `gutenberg/get-block-details`
@@ -21,6 +22,7 @@ WordPress block-editor abilities for MCP. This add-on makes Gutenberg content us
 - `gutenberg/generate-section`
 - `gutenberg/validate-content`
 - `gutenberg/audit-content`
+- `gutenberg/evaluate-copy`
 - `gutenberg/analyze-content`
 - `gutenberg/parse-content`
 - `gutenberg/serialize-blocks`
@@ -43,6 +45,14 @@ WordPress block-editor abilities for MCP. This add-on makes Gutenberg content us
 - `gutenberg/mutate-block-tree`
 - `gutenberg/set-block-lock`
 - `gutenberg/set-allowed-blocks`
+- `gutenberg/set-template-lock`
+- `gutenberg/insert-inner-block`
+- `gutenberg/duplicate-block`
+- `gutenberg/move-block`
+- `gutenberg/replace-block-text`
+- `gutenberg/get-block-bindings`
+- `gutenberg/set-block-bindings`
+- `gutenberg/normalize-heading-levels`
 - `gutenberg/update-post-blocks`
 
 ## Why This Exists
@@ -71,12 +81,12 @@ This version also adds authoring helpers for real page builds: theme/style disco
 2. Use `gutenberg/list-available-blocks`, `gutenberg/get-block-categories`, `gutenberg/get-block-details`, and `gutenberg/get-block-style-variations` to understand the site block surface.
 3. Use `gutenberg/list-patterns` and `gutenberg/get-pattern` to discover reusable pattern content.
 4. Use `gutenberg/get-page-recipes`, `gutenberg/get-section-recipes`, `gutenberg/generate-section`, or `gutenberg/generate-landing-page` to draft content.
-5. Use `gutenberg/validate-content` and `gutenberg/analyze-content` to catch weak structure, missing hierarchy, link/media issues, and round-trip problems.
+5. Use `gutenberg/validate-content`, `gutenberg/audit-content`, `gutenberg/evaluate-copy`, and `gutenberg/analyze-content` to catch weak structure, weak writing, missing hierarchy, link/media issues, and round-trip problems.
 6. Use `gutenberg/create-page-from-blocks`, `gutenberg/create-page-from-pattern`, or `gutenberg/create-landing-page` to create the page.
 7. Use `gutenberg/list-templates`, `gutenberg/get-template`, `gutenberg/create-template`, `gutenberg/update-template`, `gutenberg/list-template-parts`, and `gutenberg/get-template-part` when the active block theme matters.
 8. Use the main plugin's generic media abilities for uploads, media lookup, and featured-image updates.
 9. Use `gutenberg/list-synced-patterns`, `gutenberg/get-synced-pattern`, `gutenberg/create-synced-pattern`, and `gutenberg/update-synced-pattern` for reusable block content.
-10. Use `gutenberg/get-post-blocks`, `gutenberg/insert-pattern-into-post`, `gutenberg/transform-blocks`, `gutenberg/mutate-block-tree`, `gutenberg/set-block-lock`, `gutenberg/set-allowed-blocks`, and `gutenberg/update-post-blocks` to iterate safely.
+10. Use `gutenberg/get-post-blocks`, `gutenberg/insert-pattern-into-post`, `gutenberg/transform-blocks`, `gutenberg/mutate-block-tree`, `gutenberg/set-block-lock`, `gutenberg/set-allowed-blocks`, `gutenberg/set-template-lock`, `gutenberg/insert-inner-block`, `gutenberg/duplicate-block`, `gutenberg/move-block`, `gutenberg/replace-block-text`, `gutenberg/get-block-bindings`, `gutenberg/set-block-bindings`, `gutenberg/normalize-heading-levels`, and `gutenberg/update-post-blocks` to iterate safely.
 
 ## Which Block To Use
 
@@ -127,8 +137,9 @@ The plugin exposes blocks in a normalized shape:
 - `gutenberg/create-page-from-pattern` and `gutenberg/insert-pattern-into-post` expose pattern content as a writable workflow, not just discovery.
 - `gutenberg/analyze-content` adds outline, link, media-reference, and block-usage analysis on top of basic validation.
 - `gutenberg/audit-content` adds Gutenberg-specific QA for heading structure, empty buttons, missing alt text, and oversized spacers.
+- `gutenberg/evaluate-copy` adds lightweight editorial heuristics for vague CTAs, generic headings, dense paragraphs, shouty copy, and readability drift.
 - Synced patterns (`wp_block`) and block-theme template entities are now writable from the plugin.
-- Lock attributes, `allowedBlocks`, nested path mutations, and block style-variation data are now exposed directly.
+- Lock attributes, `allowedBlocks`, `templateLock`, nested path mutations, block bindings, text replacement, and block style-variation data are now exposed directly.
 - Generic media management stays in the main plugin to avoid overlapping `content/*` and `media/*` abilities.
 - This version still does not handle media upload itself, deep block migrations/deprecations, or theme-intelligence beyond the currently active block/theme registries.
 

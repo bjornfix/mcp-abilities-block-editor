@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.5.0
+Stable tag: 0.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,6 +18,7 @@ Included abilities:
 
 - `gutenberg/get-theme-context`
 - `gutenberg/get-style-guide`
+- `gutenberg/get-style-book`
 - `gutenberg/list-available-blocks`
 - `gutenberg/get-block-categories`
 - `gutenberg/get-block-details`
@@ -33,6 +34,7 @@ Included abilities:
 - `gutenberg/generate-section`
 - `gutenberg/validate-content`
 - `gutenberg/audit-content`
+- `gutenberg/evaluate-copy`
 - `gutenberg/analyze-content`
 - `gutenberg/parse-content`
 - `gutenberg/serialize-blocks`
@@ -55,6 +57,14 @@ Included abilities:
 - `gutenberg/mutate-block-tree`
 - `gutenberg/set-block-lock`
 - `gutenberg/set-allowed-blocks`
+- `gutenberg/set-template-lock`
+- `gutenberg/insert-inner-block`
+- `gutenberg/duplicate-block`
+- `gutenberg/move-block`
+- `gutenberg/replace-block-text`
+- `gutenberg/get-block-bindings`
+- `gutenberg/set-block-bindings`
+- `gutenberg/normalize-heading-levels`
 - `gutenberg/update-post-blocks`
 
 This is useful when an MCP client needs to:
@@ -66,12 +76,14 @@ This is useful when an MCP client needs to:
 - choose the right Gutenberg block for a content scenario
 - generate reusable sections like hero, FAQ, CTA, testimonial, and stats rows
 - generate a structured landing page from business inputs
-- validate round-trip safety, page structure, outline, link/media usage, and Gutenberg-specific QA issues
+- validate round-trip safety, page structure, outline, link/media usage, Gutenberg-specific QA issues, and copy quality
 - inspect Gutenberg content as nested blocks
 - preserve block formatting and attributes
 - create and update block templates, template parts, and synced patterns
 - apply structural block transforms without dropping into raw HTML edits
-- mutate nested block trees by path and set lock / allowed-block attributes
+- mutate nested block trees by path and set lock / allowed-block / template-lock attributes
+- duplicate, move, and text-edit blocks without dropping into raw HTML workflows
+- inspect and set block bindings for Gutenberg's metadata-driven content wiring
 - update a page without breaking block comment syntax
 - round-trip edited blocks back into valid WordPress content
 - combine with the main plugin's generic `content/*` and `media/*` abilities for non-Gutenberg-specific media flows
@@ -129,3 +141,9 @@ Requires the Abilities API plugin.
 - Added nested path-based block-tree mutation helpers.
 - Added block lock and `allowedBlocks` helpers for container/tooling workflows.
 - Kept the plugin Gutenberg-specific and non-overlapping with the main plugin's generic content/media abilities.
+
+= 0.6.0 =
+- Added style-book summary output for theme-oriented Gutenberg authoring.
+- Added `templateLock`, inner-block insertion, duplication, movement, and text-replacement helpers for direct block editing.
+- Added block-bindings inspection and update helpers.
+- Added copy evaluation heuristics for weak headings, vague CTAs, dense paragraphs, and shouty copy.
