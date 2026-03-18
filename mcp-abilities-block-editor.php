@@ -479,15 +479,45 @@ function mcp_abilities_gutenberg_get_block_catalog(): array {
 /**
  * List registered block patterns.
  *
- * @return array<int,array<string,mixed>>
+ * @return array<string,array<string,mixed>>
  */
-function mcp_abilities_gutenberg_get_pattern_catalog(): array {
+function mcp_abilities_gutenberg_get_registered_patterns_map(): array {
 	if ( ! class_exists( 'WP_Block_Patterns_Registry' ) ) {
 		return array();
 	}
 
 	$registry = WP_Block_Patterns_Registry::get_instance();
-	$patterns = $registry->get_all_registered();
+
+	try {
+		$reflection = new ReflectionClass( $registry );
+		if ( $reflection->hasProperty( 'registered_patterns' ) ) {
+			$property = $reflection->getProperty( 'registered_patterns' );
+			$property->setAccessible( true );
+			$value = $property->getValue( $registry );
+			if ( is_array( $value ) ) {
+				return $value;
+			}
+		}
+	} catch ( ReflectionException $exception ) {
+	}
+
+	$fallback = array();
+	foreach ( $registry->get_all_registered() as $index => $pattern ) {
+		if ( is_array( $pattern ) ) {
+			$fallback[ (string) $index ] = $pattern;
+		}
+	}
+
+	return $fallback;
+}
+
+/**
+ * List registered block patterns.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_get_pattern_catalog(): array {
+	$patterns = mcp_abilities_gutenberg_get_registered_patterns_map();
 	$catalog  = array();
 
 	foreach ( $patterns as $name => $pattern ) {
@@ -599,6 +629,11 @@ function mcp_abilities_gutenberg_get_pattern_details( string $name ) {
 
 	$registry = WP_Block_Patterns_Registry::get_instance();
 	$pattern  = $registry->get_registered( $name );
+
+	if ( ! is_array( $pattern ) ) {
+		$patterns = mcp_abilities_gutenberg_get_registered_patterns_map();
+		$pattern  = isset( $patterns[ $name ] ) && is_array( $patterns[ $name ] ) ? $patterns[ $name ] : null;
+	}
 
 	if ( ! is_array( $pattern ) ) {
 		return new WP_Error( 'mcp_gutenberg_pattern_not_found', 'Pattern not found.' );
@@ -2679,98 +2714,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'readonly'    => true,
 					'destructive' => false,
 					'idempotent'  => true,
-				),
-			),
-		)
-	);
-
-	mcp_abilities_gutenberg_register_ability(
-		'gutenberg/list-media',
-		array(
-			'label'               => 'List Media Library Items',
-			'description'         => 'Return recent media library items useful for Gutenberg image, cover, gallery, and featured-image workflows.',
-			'category'            => 'block-editor',
-			'input_schema'        => array(
-				'type'                 => 'object',
-				'properties'           => array(
-					'search' => array(
-						'type'        => 'string',
-						'description' => 'Optional media search term.',
-					),
-					'limit' => array(
-						'type'        => 'integer',
-						'description' => 'Maximum number of results, from 1 to 50.',
-					),
-				),
-				'additionalProperties' => false,
-			),
-			'output_schema'       => array(
-				'type'       => 'object',
-				'properties' => array(
-					'success' => array( 'type' => 'boolean' ),
-					'media'   => array( 'type' => 'array' ),
-					'count'   => array( 'type' => 'integer' ),
-				),
-			),
-			'execute_callback'    => function ( $input = array() ): array {
-				$media = mcp_abilities_gutenberg_get_media_catalog( is_array( $input ) ? $input : array() );
-				return array(
-					'success' => true,
-					'count'   => count( $media ),
-					'media'   => $media,
-				);
-			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
-			'meta'                => array(
-				'annotations' => array(
-					'readonly'    => true,
-					'destructive' => false,
-					'idempotent'  => true,
-				),
-			),
-		)
-	);
-
-	mcp_abilities_gutenberg_register_ability(
-		'gutenberg/set-post-featured-media',
-		array(
-			'label'               => 'Set Post Featured Media',
-			'description'         => 'Assign an attachment as the featured image for a post or page.',
-			'category'            => 'block-editor',
-			'input_schema'        => array(
-				'type'                 => 'object',
-				'required'             => array( 'post_id', 'attachment_id' ),
-				'properties'           => array(
-					'post_id' => array(
-						'type'        => 'integer',
-						'description' => 'Target post or page ID.',
-					),
-					'attachment_id' => array(
-						'type'        => 'integer',
-						'description' => 'Attachment ID from the media library.',
-					),
-				),
-				'additionalProperties' => false,
-			),
-			'output_schema'       => array(
-				'type'       => 'object',
-				'properties' => array(
-					'success'       => array( 'type' => 'boolean' ),
-					'message'       => array( 'type' => 'string' ),
-					'post_id'       => array( 'type' => 'integer' ),
-					'attachment_id' => array( 'type' => 'integer' ),
-					'featured_url'  => array( 'type' => 'string' ),
-				),
-			),
-			'execute_callback'    => function ( $input = array() ): array {
-				return mcp_abilities_gutenberg_set_post_featured_media( is_array( $input ) ? $input : array() );
-			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
-			'meta'                => array(
-				'annotations' => array(
-					'readonly'    => false,
-					'destructive' => false,
-					'idempotent'  => false,
 				),
 			),
 		)

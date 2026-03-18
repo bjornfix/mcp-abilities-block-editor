@@ -37,8 +37,6 @@ Included abilities:
 - `gutenberg/get-template`
 - `gutenberg/list-template-parts`
 - `gutenberg/get-template-part`
-- `gutenberg/list-media`
-- `gutenberg/set-post-featured-media`
 - `gutenberg/create-page-from-blocks`
 - `gutenberg/create-page-from-pattern`
 - `gutenberg/create-landing-page`
@@ -55,10 +53,10 @@ This is useful when an MCP client needs to:
 - generate a structured landing page from business inputs
 - validate round-trip safety, page structure, outline, and link/media usage
 - inspect Gutenberg content as nested blocks
-- inspect media library items and assign featured images
 - preserve block formatting and attributes
 - update a page without breaking block comment syntax
 - round-trip edited blocks back into valid WordPress content
+- combine with the main plugin's generic `content/*` and `media/*` abilities for non-Gutenberg-specific media flows
 
 Common guidance built into the plugin:
 

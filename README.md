@@ -25,8 +25,6 @@ WordPress block-editor abilities for MCP. This add-on makes Gutenberg content us
 - `gutenberg/get-template`
 - `gutenberg/list-template-parts`
 - `gutenberg/get-template-part`
-- `gutenberg/list-media`
-- `gutenberg/set-post-featured-media`
 - `gutenberg/create-page-from-blocks`
 - `gutenberg/create-page-from-pattern`
 - `gutenberg/create-landing-page`
@@ -45,7 +43,7 @@ This plugin provides a round-trip workflow:
 4. Write it back to the post safely.
 
 It also provides block-choice guidance so an MCP client can pick the right block for the content instead of faking layout with paragraphs and ad hoc HTML.
-This version also adds authoring helpers for real page builds: theme/style discovery, block metadata, pattern inspection and insertion, section recipes, template and template-part inspection, media lookup, featured-image assignment, deeper content analysis, and one-step page creation.
+This version also adds authoring helpers for real page builds: theme/style discovery, block metadata, pattern inspection and insertion, section recipes, template and template-part inspection, deeper content analysis, and one-step page creation.
 
 ## Requirements
 
@@ -62,7 +60,7 @@ This version also adds authoring helpers for real page builds: theme/style disco
 5. Use `gutenberg/validate-content` and `gutenberg/analyze-content` to catch weak structure, missing hierarchy, link/media issues, and round-trip problems.
 6. Use `gutenberg/create-page-from-blocks`, `gutenberg/create-page-from-pattern`, or `gutenberg/create-landing-page` to create the page.
 7. Use `gutenberg/list-templates`, `gutenberg/get-template`, `gutenberg/list-template-parts`, and `gutenberg/get-template-part` when the active block theme matters.
-8. Use `gutenberg/list-media` and `gutenberg/set-post-featured-media` for media-aware authoring flows.
+8. Use the main plugin's generic media abilities for uploads, media lookup, and featured-image updates.
 9. Use `gutenberg/get-post-blocks`, `gutenberg/insert-pattern-into-post`, and `gutenberg/update-post-blocks` to iterate safely.
 
 ## Which Block To Use
@@ -113,6 +111,7 @@ The plugin exposes blocks in a normalized shape:
 - `gutenberg/generate-landing-page` intentionally uses core blocks and conservative theme-compatible markup.
 - `gutenberg/create-page-from-pattern` and `gutenberg/insert-pattern-into-post` expose pattern content as a writable workflow, not just discovery.
 - `gutenberg/analyze-content` adds outline, link, media-reference, and block-usage analysis on top of basic validation.
+- Generic media management stays in the main plugin to avoid overlapping `content/*` and `media/*` abilities.
 - This version still does not handle media upload itself, advanced block transforms/migrations, or deep theme-intelligence beyond the currently active block/theme registries.
 
 ## Current Gaps
