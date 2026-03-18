@@ -45,6 +45,45 @@ function mcp_abilities_gutenberg_permission_callback(): bool {
 }
 
 /**
+ * Register the plugin's ability category.
+ */
+function mcp_abilities_gutenberg_register_category(): void {
+	$args = array(
+		'label'       => 'Block Editor',
+		'description' => 'Abilities for Gutenberg and block-editor authoring workflows.',
+	);
+
+	if ( doing_action( 'wp_abilities_api_categories_init' ) ) {
+		wp_register_ability_category( 'block-editor', $args );
+		return;
+	}
+
+	$registry = class_exists( 'WP_Ability_Categories_Registry' ) ? WP_Ability_Categories_Registry::get_instance() : null;
+	if ( $registry && ! $registry->is_registered( 'block-editor' ) ) {
+		$registry->register( 'block-editor', $args );
+	}
+}
+
+/**
+ * Register an ability safely even if the registry was initialized before this plugin loaded.
+ *
+ * @param string               $name Ability name.
+ * @param array<string,mixed>  $args Ability args.
+ * @return void
+ */
+function mcp_abilities_gutenberg_register_ability( string $name, array $args ): void {
+	if ( doing_action( 'wp_abilities_api_init' ) ) {
+		wp_register_ability( $name, $args );
+		return;
+	}
+
+	$registry = class_exists( 'WP_Abilities_Registry' ) ? WP_Abilities_Registry::get_instance() : null;
+	if ( $registry && ! $registry->is_registered( $name ) ) {
+		$registry->register( $name, $args );
+	}
+}
+
+/**
  * Normalize a Gutenberg parsed block tree for MCP output.
  *
  * @param array $block Parsed block from `parse_blocks()`.
@@ -823,12 +862,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		return;
 	}
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/get-theme-context',
 		array(
 			'label'               => 'Get Block Theme Context',
 			'description'         => 'Return theme details relevant to block-editor authoring.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
 				'properties'           => array(),
@@ -858,12 +897,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/get-style-guide',
 		array(
 			'label'               => 'Get Block Style Guide',
 			'description'         => 'Return theme palette, gradients, typography, spacing, and global styles for block authoring.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
 				'properties'           => array(),
@@ -893,12 +932,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/list-available-blocks',
 		array(
 			'label'               => 'List Available Blocks',
 			'description'         => 'Return the registered block types that can be used on the site.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
 				'properties'           => array(
@@ -950,12 +989,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/list-patterns',
 		array(
 			'label'               => 'List Block Patterns',
 			'description'         => 'Return registered block patterns available on the site.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
 				'properties'           => array(),
@@ -988,12 +1027,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/block-guidance',
 		array(
 			'label'               => 'Get Gutenberg Block Guidance',
 			'description'         => 'Recommend which Gutenberg block to use for common content scenarios.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
 				'properties'           => array(
@@ -1037,12 +1076,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/get-page-recipes',
 		array(
 			'label'               => 'Get Page Recipes',
 			'description'         => 'Return reusable page structure recipes for landing pages and similar layouts.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
 				'properties'           => array(),
@@ -1072,12 +1111,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/generate-landing-page',
 		array(
 			'label'               => 'Generate Landing Page Blocks',
 			'description'         => 'Generate a landing-page blueprint plus ready-to-save Gutenberg content for a business.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'required'   => array( 'business_name' ),
@@ -1145,12 +1184,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/validate-content',
 		array(
 			'label'               => 'Validate Gutenberg Content',
 			'description'         => 'Validate Gutenberg content for block presence, round-trip stability, and basic landing-page structure.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
@@ -1210,12 +1249,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/parse-content',
 		array(
 			'label'               => 'Parse Gutenberg Content',
 			'description'         => 'Parse raw post content into a normalized Gutenberg block tree.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
 				'required'             => array( 'content' ),
@@ -1258,12 +1297,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/serialize-blocks',
 		array(
 			'label'               => 'Serialize Gutenberg Blocks',
 			'description'         => 'Serialize a normalized Gutenberg block tree into valid block markup.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
 				'required'             => array( 'blocks' ),
@@ -1316,12 +1355,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/get-post-blocks',
 		array(
 			'label'               => 'Get Post Gutenberg Blocks',
 			'description'         => 'Load a post or page and return its raw content plus normalized Gutenberg blocks.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
 				'required'             => array( 'post_id' ),
@@ -1391,12 +1430,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/create-page-from-blocks',
 		array(
 			'label'               => 'Create Page From Gutenberg Blocks',
 			'description'         => 'Create a new page using raw content or normalized Gutenberg blocks.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'required'   => array( 'title' ),
@@ -1451,12 +1490,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/create-landing-page',
 		array(
 			'label'               => 'Create Landing Page',
 			'description'         => 'Generate and create a landing page for a business in one step.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'required'   => array( 'business_name' ),
@@ -1542,12 +1581,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 
-	wp_register_ability(
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/update-post-blocks',
 		array(
 			'label'               => 'Update Post Gutenberg Blocks',
 			'description'         => 'Update a post or page using normalized Gutenberg blocks or raw content.',
-			'category'            => 'content',
+			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'required'   => array( 'post_id' ),
@@ -1679,4 +1718,10 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		)
 	);
 }
+add_action( 'wp_abilities_api_categories_init', 'mcp_abilities_gutenberg_register_category' );
 add_action( 'wp_abilities_api_init', 'mcp_abilities_gutenberg_register_abilities' );
+
+if ( did_action( 'init' ) ) {
+	mcp_abilities_gutenberg_register_category();
+	mcp_abilities_gutenberg_register_abilities();
+}
