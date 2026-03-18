@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.4.0
+Stable tag: 0.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,7 @@ Included abilities:
 - `gutenberg/list-available-blocks`
 - `gutenberg/get-block-categories`
 - `gutenberg/get-block-details`
+- `gutenberg/get-block-style-variations`
 - `gutenberg/list-patterns`
 - `gutenberg/get-pattern`
 - `gutenberg/list-synced-patterns`
@@ -51,12 +52,16 @@ Included abilities:
 - `gutenberg/create-landing-page`
 - `gutenberg/insert-pattern-into-post`
 - `gutenberg/transform-blocks`
+- `gutenberg/mutate-block-tree`
+- `gutenberg/set-block-lock`
+- `gutenberg/set-allowed-blocks`
 - `gutenberg/update-post-blocks`
 
 This is useful when an MCP client needs to:
 
 - inspect the site block/theme/style context before authoring
 - inspect block metadata, categories, templates, and template parts
+- inspect block style variations and style-relevant theme support
 - discover and reuse registered patterns and synced patterns
 - choose the right Gutenberg block for a content scenario
 - generate reusable sections like hero, FAQ, CTA, testimonial, and stats rows
@@ -66,6 +71,7 @@ This is useful when an MCP client needs to:
 - preserve block formatting and attributes
 - create and update block templates, template parts, and synced patterns
 - apply structural block transforms without dropping into raw HTML edits
+- mutate nested block trees by path and set lock / allowed-block attributes
 - update a page without breaking block comment syntax
 - round-trip edited blocks back into valid WordPress content
 - combine with the main plugin's generic `content/*` and `media/*` abilities for non-Gutenberg-specific media flows
@@ -117,3 +123,9 @@ Requires the Abilities API plugin.
 - Added Gutenberg-specific audit checks for heading structure, empty buttons, missing alt text, and spacer overuse.
 - Added block-tree transform helpers for group wrapping, insertion, replacement, and removal.
 - Kept generic media/content CRUD in the main plugin to avoid ability overlap.
+
+= 0.5.0 =
+- Added block style-variation and style-support inspection.
+- Added nested path-based block-tree mutation helpers.
+- Added block lock and `allowedBlocks` helpers for container/tooling workflows.
+- Kept the plugin Gutenberg-specific and non-overlapping with the main plugin's generic content/media abilities.

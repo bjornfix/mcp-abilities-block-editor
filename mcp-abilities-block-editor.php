@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.4.0
+ * Version: 0.5.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -1373,6 +1373,225 @@ function mcp_abilities_gutenberg_audit_content( string $content ): array {
 }
 
 /**
+ * Get block style variations and style-relevant supports for a block.
+ *
+ * @param string $name Block name.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_get_block_style_variations( string $name ) {
+	$details = mcp_abilities_gutenberg_get_block_details( $name );
+	if ( is_wp_error( $details ) ) {
+		return $details;
+	}
+
+	$style_guide = mcp_abilities_gutenberg_get_style_guide();
+	$supports    = is_array( $details['supports'] ?? null ) ? $details['supports'] : array();
+
+	return array(
+		'name'             => $name,
+		'styles'           => is_array( $details['styles'] ?? null ) ? $details['styles'] : array(),
+		'supports'         => $supports,
+		'color_support'    => $supports['color'] ?? null,
+		'spacing_support'  => $supports['spacing'] ?? null,
+		'typography_support' => $supports['typography'] ?? null,
+		'shadow_support'   => $supports['shadow'] ?? null,
+		'theme_palette'    => $style_guide['palette'] ?? array(),
+		'theme_gradients'  => $style_guide['gradients'] ?? array(),
+		'theme_font_sizes' => $style_guide['font_sizes'] ?? array(),
+		'theme_spacing'    => $style_guide['spacing_sizes'] ?? array(),
+	);
+}
+
+/**
+ * Normalize a block path array.
+ *
+ * @param mixed $path Input path.
+ * @return array<int,int>|WP_Error
+ */
+function mcp_abilities_gutenberg_normalize_block_path( $path ) {
+	if ( ! is_array( $path ) ) {
+		return new WP_Error( 'mcp_gutenberg_invalid_path', 'path must be an array of indexes.' );
+	}
+
+	$normalized = array();
+	foreach ( $path as $segment ) {
+		if ( ! is_numeric( $segment ) ) {
+			return new WP_Error( 'mcp_gutenberg_invalid_path', 'path must contain only numeric indexes.' );
+		}
+		$normalized[] = (int) $segment;
+	}
+
+	return $normalized;
+}
+
+/**
+ * Read a nested block by path from a normalized block tree.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ * @param array<int,int>                 $path Block path.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_get_block_by_path( array $blocks, array $path ) {
+	$current = $blocks;
+	$node    = null;
+
+	foreach ( $path as $depth => $index ) {
+		if ( ! isset( $current[ $index ] ) || ! is_array( $current[ $index ] ) ) {
+			return new WP_Error( 'mcp_gutenberg_path_not_found', sprintf( 'Block path segment %d was not found.', $depth ) );
+		}
+		$node = $current[ $index ];
+		$current = isset( $node['inner_blocks'] ) && is_array( $node['inner_blocks'] ) ? $node['inner_blocks'] : array();
+	}
+
+	return is_array( $node ) ? $node : new WP_Error( 'mcp_gutenberg_path_not_found', 'Block path was not found.' );
+}
+
+/**
+ * Mutate a normalized block tree by path.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ * @param array<int,int>                 $path Block path.
+ * @param callable                       $mutator Mutator callback.
+ * @return array<int,array<string,mixed>>|WP_Error
+ */
+function mcp_abilities_gutenberg_mutate_blocks_at_path( array $blocks, array $path, callable $mutator ) {
+	$index = array_shift( $path );
+	if ( null === $index || ! isset( $blocks[ $index ] ) || ! is_array( $blocks[ $index ] ) ) {
+		return new WP_Error( 'mcp_gutenberg_path_not_found', 'Target block path was not found.' );
+	}
+
+	if ( empty( $path ) ) {
+		$result = $mutator( $blocks[ $index ] );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		if ( null === $result ) {
+			array_splice( $blocks, $index, 1 );
+			return array_values( $blocks );
+		}
+
+		if ( ! is_array( $result ) ) {
+			return new WP_Error( 'mcp_gutenberg_invalid_mutation', 'Mutator must return a block array, null, or WP_Error.' );
+		}
+
+		$blocks[ $index ] = $result;
+		return $blocks;
+	}
+
+	$inner_blocks = isset( $blocks[ $index ]['inner_blocks'] ) && is_array( $blocks[ $index ]['inner_blocks'] ) ? $blocks[ $index ]['inner_blocks'] : array();
+	$mutated_inner = mcp_abilities_gutenberg_mutate_blocks_at_path( $inner_blocks, $path, $mutator );
+	if ( is_wp_error( $mutated_inner ) ) {
+		return $mutated_inner;
+	}
+
+	$blocks[ $index ]['inner_blocks'] = $mutated_inner;
+	return $blocks;
+}
+
+/**
+ * Apply a nested block-tree mutation.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_mutate_block_tree( array $input ) {
+	$path   = mcp_abilities_gutenberg_normalize_block_path( $input['path'] ?? null );
+	$blocks = mcp_abilities_gutenberg_denormalize_blocks( $input['blocks'] ?? null );
+
+	if ( is_wp_error( $path ) ) {
+		return $path;
+	}
+	if ( is_wp_error( $blocks ) ) {
+		return $blocks;
+	}
+
+	$normalized = mcp_abilities_gutenberg_normalize_blocks( $blocks );
+	$operation  = isset( $input['operation'] ) ? sanitize_key( (string) $input['operation'] ) : '';
+
+	$mutated = mcp_abilities_gutenberg_mutate_blocks_at_path(
+		$normalized,
+		$path,
+		static function ( array $block ) use ( $input, $operation ) {
+			switch ( $operation ) {
+				case 'update-attrs':
+					$attrs = isset( $input['attrs'] ) && is_array( $input['attrs'] ) ? $input['attrs'] : array();
+					$block['attrs'] = array_replace_recursive( is_array( $block['attrs'] ?? null ) ? $block['attrs'] : array(), $attrs );
+					return $block;
+
+				case 'replace-block':
+					if ( empty( $input['block'] ) || ! is_array( $input['block'] ) ) {
+						return new WP_Error( 'mcp_gutenberg_missing_block', 'block is required for replace-block.' );
+					}
+					return mcp_abilities_gutenberg_normalize_block( mcp_abilities_gutenberg_denormalize_block( $input['block'] ) );
+
+				case 'remove-block':
+					return null;
+
+				default:
+					return new WP_Error( 'mcp_gutenberg_unknown_mutation', 'Unsupported mutation operation.' );
+			}
+		}
+	);
+
+	if ( is_wp_error( $mutated ) ) {
+		return $mutated;
+	}
+
+	$denormalized = mcp_abilities_gutenberg_denormalize_blocks( $mutated );
+	if ( is_wp_error( $denormalized ) ) {
+		return $denormalized;
+	}
+
+	$content = serialize_blocks( $denormalized );
+
+	return array(
+		'operation' => $operation,
+		'path'      => $path,
+		'content'   => $content,
+		'summary'   => mcp_abilities_gutenberg_content_summary( $content ),
+		'blocks'    => $mutated,
+	);
+}
+
+/**
+ * Set block lock attributes by path.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_set_block_lock( array $input ) {
+	$lock = array(
+		'move'   => ! empty( $input['lock_move'] ),
+		'remove' => ! empty( $input['lock_remove'] ),
+	);
+
+	$input['operation'] = 'update-attrs';
+	$input['attrs']     = array(
+		'lock' => $lock,
+	);
+
+	return mcp_abilities_gutenberg_mutate_block_tree( $input );
+}
+
+/**
+ * Set allowedBlocks on a container block by path.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_set_allowed_blocks( array $input ) {
+	$allowed = isset( $input['allowed_blocks'] ) && is_array( $input['allowed_blocks'] ) ? array_values( array_map( 'strval', $input['allowed_blocks'] ) ) : array();
+
+	$input['operation'] = 'update-attrs';
+	$input['attrs']     = array(
+		'allowedBlocks' => $allowed,
+	);
+
+	return mcp_abilities_gutenberg_mutate_block_tree( $input );
+}
+
+/**
  * Return reusable section recipes.
  *
  * @return array<int,array<string,mixed>>
@@ -2343,6 +2562,56 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				return array(
 					'success' => true,
 					'block'   => $details,
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-block-style-variations',
+		array(
+			'label'               => 'Get Block Style Variations',
+			'description'         => 'Return style variations and style-relevant theme support data for a block type.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'name' ),
+				'properties'           => array(
+					'name' => array(
+						'type'        => 'string',
+						'description' => 'Registered block name such as core/group.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'styles'  => array( 'type' => 'object' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$styles = mcp_abilities_gutenberg_get_block_style_variations( isset( $input['name'] ) ? (string) $input['name'] : '' );
+				if ( is_wp_error( $styles ) ) {
+					return array(
+						'success' => false,
+						'message' => $styles->get_error_message(),
+					);
+				}
+
+				return array(
+					'success' => true,
+					'styles'  => $styles,
 				);
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
@@ -3944,6 +4213,190 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_transform_blocks( is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $result ) ) {
+					return array(
+						'success' => false,
+						'message' => $result->get_error_message(),
+					);
+				}
+				return array_merge( array( 'success' => true ), $result );
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/mutate-block-tree',
+		array(
+			'label'               => 'Mutate Gutenberg Block Tree',
+			'description'         => 'Apply a nested path-based mutation to a normalized Gutenberg block tree.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'required'   => array( 'operation', 'path', 'blocks' ),
+				'properties' => array(
+					'operation' => array(
+						'type' => 'string',
+						'enum' => array( 'update-attrs', 'replace-block', 'remove-block' ),
+					),
+					'path' => array(
+						'type'        => 'array',
+						'description' => 'Nested zero-based block path, for example [0,1,2].',
+						'items'       => array( 'type' => 'integer' ),
+					),
+					'blocks' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'object' ),
+					),
+					'attrs' => array(
+						'type'        => 'object',
+						'description' => 'Attributes to merge into the target block.',
+					),
+					'block' => array(
+						'type'        => 'object',
+						'description' => 'Replacement block for replace-block.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'   => array( 'type' => 'boolean' ),
+					'operation' => array( 'type' => 'string' ),
+					'path'      => array( 'type' => 'array' ),
+					'content'   => array( 'type' => 'string' ),
+					'summary'   => array( 'type' => 'object' ),
+					'blocks'    => array( 'type' => 'array' ),
+					'message'   => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$result = mcp_abilities_gutenberg_mutate_block_tree( is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $result ) ) {
+					return array(
+						'success' => false,
+						'message' => $result->get_error_message(),
+					);
+				}
+				return array_merge( array( 'success' => true ), $result );
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/set-block-lock',
+		array(
+			'label'               => 'Set Block Lock',
+			'description'         => 'Set `lock.move` and `lock.remove` attributes on a block at a nested path.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'required'   => array( 'path', 'blocks' ),
+				'properties' => array(
+					'path' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'integer' ),
+					),
+					'blocks' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'object' ),
+					),
+					'lock_move' => array(
+						'type'        => 'boolean',
+						'description' => 'Prevent moving the block.',
+					),
+					'lock_remove' => array(
+						'type'        => 'boolean',
+						'description' => 'Prevent removing the block.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'content' => array( 'type' => 'string' ),
+					'summary' => array( 'type' => 'object' ),
+					'blocks'  => array( 'type' => 'array' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$result = mcp_abilities_gutenberg_set_block_lock( is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $result ) ) {
+					return array(
+						'success' => false,
+						'message' => $result->get_error_message(),
+					);
+				}
+				return array_merge( array( 'success' => true ), $result );
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/set-allowed-blocks',
+		array(
+			'label'               => 'Set Allowed Blocks',
+			'description'         => 'Set `allowedBlocks` on a container block at a nested path.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'required'   => array( 'path', 'blocks', 'allowed_blocks' ),
+				'properties' => array(
+					'path' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'integer' ),
+					),
+					'blocks' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'object' ),
+					),
+					'allowed_blocks' => array(
+						'type'        => 'array',
+						'description' => 'Block names allowed inside the target container.',
+						'items'       => array( 'type' => 'string' ),
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'content' => array( 'type' => 'string' ),
+					'summary' => array( 'type' => 'object' ),
+					'blocks'  => array( 'type' => 'array' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$result = mcp_abilities_gutenberg_set_allowed_blocks( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
 					return array(
 						'success' => false,
