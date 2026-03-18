@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.9.0
+Stable tag: 0.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -37,6 +37,7 @@ Included abilities:
 - `gutenberg/validate-content`
 - `gutenberg/audit-content`
 - `gutenberg/evaluate-copy`
+- `gutenberg/suggest-copy-fixes`
 - `gutenberg/analyze-content`
 - `gutenberg/parse-content`
 - `gutenberg/serialize-blocks`
@@ -58,6 +59,8 @@ Included abilities:
 - `gutenberg/create-page-from-blocks`
 - `gutenberg/create-synced-pattern`
 - `gutenberg/update-synced-pattern`
+- `gutenberg/extract-synced-pattern`
+- `gutenberg/insert-synced-pattern-into-post`
 - `gutenberg/create-page-from-pattern`
 - `gutenberg/create-landing-page`
 - `gutenberg/insert-pattern-into-post`
@@ -88,9 +91,11 @@ This is useful when an MCP client needs to:
 - generate reusable sections like hero, FAQ, CTA, testimonial, and stats rows
 - generate a structured landing page from business inputs
 - validate round-trip safety, page structure, outline, link/media usage, Gutenberg-specific QA issues, and copy quality
+- turn weak copy findings into block-level rewrite suggestions
 - inspect Gutenberg content as nested blocks
 - preserve block formatting and attributes
 - create and update block templates, template parts, and synced patterns
+- extract existing blocks into synced patterns and reinsert them as reusable `core/block` references
 - create and update Gutenberg navigation entities (`wp_navigation`)
 - apply structural block transforms without dropping into raw HTML edits
 - mutate nested block trees by path and set lock / allowed-block / template-lock attributes
@@ -158,6 +163,23 @@ Requires the Abilities API plugin.
 - Added style-book summary output for theme-oriented Gutenberg authoring.
 - Added `templateLock`, inner-block insertion, duplication, movement, and text-replacement helpers for direct block editing.
 - Added block-bindings inspection and update helpers.
+
+= 0.7.0 =
+- Added site-editor summary and `wp_navigation` CRUD abilities.
+- Fixed navigation summaries so nested navigation items are counted correctly.
+
+= 0.8.0 =
+- Added site-editor reference graph inspection.
+- Added reverse navigation usage lookup.
+
+= 0.9.0 =
+- Added reverse template-part usage lookup.
+- Fixed template-part usage lookup so slug-based references work even when no directly retrievable template-part entity is resolved first.
+
+= 0.10.0 =
+- Added copy-fix suggestions on top of the existing copy evaluator.
+- Added synced-pattern extraction from existing block trees.
+- Added synced-pattern insertion into posts as reusable `core/block` references.
 - Added copy evaluation heuristics for weak headings, vague CTAs, dense paragraphs, and shouty copy.
 
 = 0.7.0 =
