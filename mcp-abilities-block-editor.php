@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.19.8
+ * Version: 0.19.9
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -466,6 +466,14 @@ function mcp_abilities_gutenberg_block_guidance_catalog(): array {
 			'use_when'     => 'Use for short supporting proof or reassurance that belongs immediately under hero copy or buttons.',
 			'avoid_when'   => 'Avoid leaving a large empty gap between the CTA cluster and the support row unless it is intentionally becoming a new section.',
 			'notes'        => 'Treat the proof row as part of the same selling moment. Keep the transition compact, and only use a larger gap when the support row has a clearly separate surface or section identity.',
+		),
+		array(
+			'scenario'     => 'Adjacent full-width sections that should visually touch',
+			'best_block'   => 'core/group',
+			'alternatives' => array( 'core/cover', 'core/group' ),
+			'use_when'     => 'Use when stacking a hero, band, strip, or other full-width sections with no intended seam between them.',
+			'avoid_when'   => 'Avoid relying on the default flow gap between adjacent full-width sections when the design expects edge-to-edge continuity.',
+			'notes'        => 'In flow layouts, WordPress can inject a default seam between stacked sections. If the visual intent is a continuous transition, neutralize that seam explicitly instead of letting a bright strip appear by accident.',
 		),
 		array(
 			'scenario'     => 'Image with optional caption',
@@ -2573,6 +2581,7 @@ function mcp_abilities_gutenberg_is_blocking_design_issue( string $type ): bool 
 			'section_width_inconsistency_risk',
 			'internal_measure_mismatch',
 			'followup_cluster_detachment_risk',
+			'fullwidth_section_seam_gap_risk',
 			'row_treatment_inconsistency',
 			'repeated_object_treatment_inconsistency',
 			'noninteractive_control_affordance_risk',
@@ -3278,6 +3287,130 @@ function mcp_abilities_gutenberg_collect_css_followup_cluster_detachment_issues(
 				'message'         => 'A follow-up support cluster sits noticeably below the CTA cluster above it. When proof rows, metadata strips, or support items belong to the same selling moment, too much local gap makes them feel detached.',
 			);
 		}
+	}
+
+	return $issues;
+}
+
+/**
+ * Detect visible seam gaps between adjacent full-width sections inside flow layouts.
+ *
+ * @param string $html Rendered HTML.
+ * @param string $css Combined embedded CSS.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_rendered_fullwidth_seam_gap_issues( string $html, string $css, string $source ): array {
+	if ( '' === trim( $html ) ) {
+		return array();
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-seam-root">' . $html . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array();
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-seam-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( ! $root instanceof DOMElement ) {
+		return array();
+	}
+
+	$issues = array();
+	$nodes  = $xpath->query( './/*[contains(concat(" ", normalize-space(@class), " "), " is-layout-flow ")]', $root );
+	if ( ! $nodes instanceof DOMNodeList ) {
+		return array();
+	}
+
+	foreach ( $nodes as $node ) {
+		if ( ! $node instanceof DOMElement ) {
+			continue;
+		}
+
+		$children = mcp_abilities_gutenberg_get_significant_child_elements( $node );
+		if ( count( $children ) < 2 ) {
+			continue;
+		}
+
+		$consecutive_pairs = array();
+		for ( $index = 0; $index < count( $children ) - 1; $index++ ) {
+			$current = $children[ $index ];
+			$next    = $children[ $index + 1 ];
+			$current_classes = ' ' . strtolower( trim( preg_replace( '/\s+/u', ' ', $current->getAttribute( 'class' ) ) ) ) . ' ';
+			$next_classes    = ' ' . strtolower( trim( preg_replace( '/\s+/u', ' ', $next->getAttribute( 'class' ) ) ) ) . ' ';
+
+			if ( false === strpos( $current_classes, ' alignfull ' ) || false === strpos( $next_classes, ' alignfull ' ) ) {
+				continue;
+			}
+
+			$consecutive_pairs[] = array(
+				mcp_abilities_gutenberg_describe_dom_element( $current ),
+				mcp_abilities_gutenberg_describe_dom_element( $next ),
+			);
+		}
+
+		if ( empty( $consecutive_pairs ) ) {
+			continue;
+		}
+
+		$parent_selector = mcp_abilities_gutenberg_describe_dom_element( $node );
+		$css_has_reset   = false;
+		if ( '' !== trim( $css ) ) {
+			$parent_classes = array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							'strval',
+							explode( ' ', trim( preg_replace( '/\s+/u', ' ', $node->getAttribute( 'class' ) ) ) )
+						)
+					)
+				)
+			);
+
+			$css_normalized = strtolower( preg_replace( '/\s+/u', ' ', $css ) );
+			$has_parent_hint = false;
+			foreach ( $parent_classes as $parent_class ) {
+				if ( '' !== $parent_class && false !== strpos( $css_normalized, '.' . strtolower( $parent_class ) ) ) {
+					$has_parent_hint = true;
+					break;
+				}
+			}
+
+			if (
+				$has_parent_hint &&
+				preg_match( '/>\s*\*\s*\+\s*\*/', $css_normalized ) &&
+				preg_match( '/margin-block-start\s*:\s*0(?:px)?|margin-top\s*:\s*0(?:px)?/', $css_normalized )
+			) {
+				$css_has_reset = true;
+			}
+		}
+
+		if ( $css_has_reset ) {
+			continue;
+		}
+
+		$examples = array();
+		foreach ( array_slice( $consecutive_pairs, 0, 3 ) as $pair ) {
+			$examples[] = $pair[0] . ' -> ' . $pair[1];
+		}
+
+		$issues[] = array(
+			'type'      => 'fullwidth_section_seam_gap_risk',
+			'severity'  => 'notice',
+			'source'    => $source,
+			'selector'  => $parent_selector,
+			'selectors' => array( $parent_selector ),
+			'examples'  => $examples,
+			'message'   => 'Adjacent full-width sections sit inside a flow layout without an explicit seam reset. WordPress flow spacing can then leave a bright strip or visible gap between sections that should visually touch.',
+		);
 	}
 
 	return $issues;
@@ -5452,7 +5585,7 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 
 	foreach ( is_array( $layout_risks['issues'] ?? null ) ? $layout_risks['issues'] : array() as $issue ) {
 		$type = (string) ( $issue['type'] ?? '' );
-		if ( in_array( $type, array( 'section_width_inconsistency_risk', 'sibling_treatment_inconsistency', 'row_treatment_inconsistency', 'repeated_object_treatment_inconsistency', 'followup_cluster_detachment_risk', 'noninteractive_control_affordance_risk', 'spacing_rhythm_drift', 'alignfull_breakout_risk', 'button_contrast_risk', 'trailing_content_gap_risk', 'design_token_sprawl', 'card_monotony_risk' ), true ) ) {
+		if ( in_array( $type, array( 'section_width_inconsistency_risk', 'sibling_treatment_inconsistency', 'row_treatment_inconsistency', 'repeated_object_treatment_inconsistency', 'followup_cluster_detachment_risk', 'fullwidth_section_seam_gap_risk', 'noninteractive_control_affordance_risk', 'spacing_rhythm_drift', 'alignfull_breakout_risk', 'button_contrast_risk', 'trailing_content_gap_risk', 'design_token_sprawl', 'card_monotony_risk' ), true ) ) {
 			$issues[] = $issue;
 		}
 	}
@@ -5508,6 +5641,7 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 		$issues,
 		mcp_abilities_gutenberg_collect_internal_measure_mismatch_risks( $content_measures, array_merge( $text_measures, $nested_container_measures ), 'embedded-style-blocks' ),
 		mcp_abilities_gutenberg_collect_block_spacing_rhythm_issues( $content ),
+		mcp_abilities_gutenberg_collect_rendered_fullwidth_seam_gap_issues( $rendered_html, implode( "\n", array_map( static function ( array $entry ): string { return (string) ( $entry['css'] ?? '' ); }, array_values( $embedded_css_entries ) ) ), 'rendered-html' ),
 		mcp_abilities_gutenberg_collect_rendered_row_treatment_issues( $rendered_html, 'rendered-html' ),
 		mcp_abilities_gutenberg_collect_repeated_object_treatment_issues( $rendered_html, 'rendered-html' ),
 		mcp_abilities_gutenberg_collect_rendered_boxed_module_issues( $rendered_html, 'rendered-html' )
@@ -5537,6 +5671,8 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 			$score -= 14;
 		} elseif ( 'followup_cluster_detachment_risk' === $type ) {
 			$score -= 12;
+		} elseif ( 'fullwidth_section_seam_gap_risk' === $type ) {
+			$score -= 14;
 		} elseif ( 'sibling_treatment_inconsistency' === $type ) {
 			$score -= 14;
 		} elseif ( 'row_treatment_inconsistency' === $type ) {
@@ -5576,6 +5712,9 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 	}
 	if ( in_array( 'followup_cluster_detachment_risk', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'Keep follow-up proof rows, metadata strips, and support clusters visually attached to the CTA or copy they belong to. If the gap gets too loose, the cluster stops feeling like part of the same selling moment.';
+	}
+	if ( in_array( 'fullwidth_section_seam_gap_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'When adjacent full-width sections are meant to touch, explicitly neutralize flow-layout margins between them. Otherwise WordPress block gap can leave a visible seam or bright strip between sections.';
 	}
 	if ( in_array( 'sibling_treatment_inconsistency', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'When a repeated row uses accent styling such as tilt, shadow, or background shifts, either style all siblings coherently or make one spotlight card obviously intentional.';
@@ -5682,6 +5821,24 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 					'Tighten the local top spacing so the support row reads as part of the same cluster rather than a detached afterthought.',
 					'Use a compact gap for CTA-to-proof transitions inside a hero or intro. Save larger gaps for real section breaks.',
 					'If the support row needs stronger separation, give it a clearer structural reason such as a contrasting surface or deliberate section wrapper instead of only empty air.',
+				),
+			);
+		} elseif ( 'fullwidth_section_seam_gap_risk' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values(
+					array_filter(
+						array_merge(
+							array( (string) ( $issue['selector'] ?? '' ) ),
+							array_values( array_map( 'strval', is_array( $issue['examples'] ?? null ) ? $issue['examples'] : array() ) )
+						)
+					)
+				),
+				'problem'      => 'Adjacent full-width sections are separated by default flow spacing, creating a visible seam even though they should feel continuous.',
+				'fixes'        => array(
+					'Reset the flow-layout seam between adjacent full-width sections with an explicit `margin-block-start:0` or equivalent adjacent-sibling rule.',
+					'If the sections are supposed to separate, make the separation intentional with a real divider, color shift, or spacing rhythm instead of an accidental bright strip.',
+					'Do not rely on WordPress default block gap between stacked full-width bands when the visual intent is edge-to-edge continuity.',
 				),
 			);
 		} elseif ( 'sibling_treatment_inconsistency' === $type ) {

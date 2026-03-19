@@ -163,6 +163,11 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.19.9
+
+- Added `fullwidth_section_seam_gap_risk` so `gutenberg/evaluate-design` can flag default flow-layout seams between adjacent full-width sections that should visually touch.
+- Expanded guidance and design-fix suggestions so adjacent full-width sections either explicitly reset the seam or separate for a real visual reason.
+
 ### 0.19.8
 
 - Added `followup_cluster_detachment_risk` so `gutenberg/evaluate-design` can flag proof rows or support clusters that drift too far below the CTA/copy cluster they belong to.
