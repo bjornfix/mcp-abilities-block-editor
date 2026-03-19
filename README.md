@@ -163,6 +163,11 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.19.8
+
+- Added `followup_cluster_detachment_risk` so `gutenberg/evaluate-design` can flag proof rows or support clusters that drift too far below the CTA/copy cluster they belong to.
+- Expanded block guidance and design-fix suggestions so AI clients keep follow-up proof visually attached to the selling moment instead of separating it with dead air.
+
 ### 0.19.7
 
 - Expanded non-interactive proof guidance so visually prominent proof rows are expected to carry useful supporting lines instead of bare label chips.

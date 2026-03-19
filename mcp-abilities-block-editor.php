@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.19.7
+ * Version: 0.19.8
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -458,6 +458,14 @@ function mcp_abilities_gutenberg_block_guidance_catalog(): array {
 			'use_when'     => 'Use for short non-interactive proof points such as scope labels, guarantees, or service metadata that sit near a hero or intro.',
 			'avoid_when'   => 'Avoid styling inert labels to look like buttons, pills, or controls when nothing happens on click.',
 			'notes'        => 'If the items are not links or controls, keep them visually quieter than the real CTA. If they take up meaningful space, make them earn it with a short proof strip or concise supporting line rather than naked label chips.',
+		),
+		array(
+			'scenario'     => 'Supportive proof row directly under a CTA cluster',
+			'best_block'   => 'core/group',
+			'alternatives' => array( 'core/columns', 'core/list' ),
+			'use_when'     => 'Use for short supporting proof or reassurance that belongs immediately under hero copy or buttons.',
+			'avoid_when'   => 'Avoid leaving a large empty gap between the CTA cluster and the support row unless it is intentionally becoming a new section.',
+			'notes'        => 'Treat the proof row as part of the same selling moment. Keep the transition compact, and only use a larger gap when the support row has a clearly separate surface or section identity.',
 		),
 		array(
 			'scenario'     => 'Image with optional caption',
@@ -2294,6 +2302,45 @@ function mcp_abilities_gutenberg_describe_dom_element( DOMElement $element ): st
 }
 
 /**
+ * Return significant direct child elements.
+ *
+ * @param DOMElement $element Parent element.
+ * @return array<int,DOMElement>
+ */
+function mcp_abilities_gutenberg_get_significant_child_elements( DOMElement $element ): array {
+	$children = array();
+	foreach ( $element->childNodes as $child ) {
+		if ( ! $child instanceof DOMElement ) {
+			continue;
+		}
+		if ( ! mcp_abilities_gutenberg_dom_element_has_meaningful_content( $child ) ) {
+			continue;
+		}
+		$children[] = $child;
+	}
+
+	return $children;
+}
+
+/**
+ * Return the previous significant element sibling.
+ *
+ * @param DOMElement $element Element to inspect.
+ * @return DOMElement|null
+ */
+function mcp_abilities_gutenberg_get_previous_significant_element_sibling( DOMElement $element ): ?DOMElement {
+	$node = $element->previousSibling;
+	while ( $node ) {
+		if ( $node instanceof DOMElement && mcp_abilities_gutenberg_dom_element_has_meaningful_content( $node ) ) {
+			return $node;
+		}
+		$node = $node->previousSibling;
+	}
+
+	return null;
+}
+
+/**
  * Build a compact CSS snippet for diagnostics.
  *
  * @param string $snippet Raw CSS snippet.
@@ -2525,6 +2572,7 @@ function mcp_abilities_gutenberg_is_blocking_design_issue( string $type ): bool 
 		array(
 			'section_width_inconsistency_risk',
 			'internal_measure_mismatch',
+			'followup_cluster_detachment_risk',
 			'row_treatment_inconsistency',
 			'repeated_object_treatment_inconsistency',
 			'noninteractive_control_affordance_risk',
@@ -3088,6 +3136,151 @@ function mcp_abilities_gutenberg_collect_internal_measure_mismatch_risks( array 
 			'message'          => 'A major section uses the shared page width, but a nested row or text lane inside it is capped much narrower. That often leaves a fake empty lane and makes the section feel unfinished even when the outer wrapper is aligned correctly.',
 		),
 	);
+}
+
+/**
+ * Detect support rows that drift too far below the CTA cluster they belong to.
+ *
+ * @param string $css Embedded CSS.
+ * @param string $html Rendered HTML.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_followup_cluster_detachment_issues( string $css, string $html, string $source ): array {
+	if ( '' === trim( $css ) || '' === trim( $html ) ) {
+		return array();
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-design-root">' . $html . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array();
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-design-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( ! $root instanceof DOMElement ) {
+		return array();
+	}
+
+	$issues = array();
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return array();
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = (string) ( $rule[2] ?? '' );
+		if ( '' === $selector_block || '' === trim( $declarations ) ) {
+			continue;
+		}
+
+		if ( ! preg_match( '/margin-top\s*:\s*([^;]+)\s*;/i', $declarations, $margin_match ) ) {
+			continue;
+		}
+
+		$margin_raw = trim( (string) $margin_match[1] );
+		$margin_px  = mcp_abilities_gutenberg_parse_spacing_value_to_px( $margin_raw );
+		if ( ! is_float( $margin_px ) || $margin_px < 20 ) {
+			continue;
+		}
+
+		foreach ( array_map( 'trim', explode( ',', $selector_block ) ) as $selector ) {
+			if ( '' === $selector ) {
+				continue;
+			}
+
+			$class_tokens = array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							'strval',
+							preg_match_all( '/\.([A-Za-z0-9_-]+)/', $selector, $class_matches ) ? $class_matches[1] : array()
+						)
+					)
+				)
+			);
+			if ( empty( $class_tokens ) ) {
+				continue;
+			}
+
+			$clusterish_selector = preg_match( '/(row|strip|grid|list|meta|proof|pill|chip|badge|items)/i', $selector );
+			if ( ! $clusterish_selector ) {
+				continue;
+			}
+
+			$query_parts = array();
+			foreach ( $class_tokens as $class_token ) {
+				$query_parts[] = sprintf(
+					'contains(concat(" ", normalize-space(@class), " "), " %s ")',
+					$class_token
+				);
+			}
+			$nodes = $xpath->query( './/*[' . implode( ' and ', $query_parts ) . ']', $root );
+			if ( ! $nodes instanceof DOMNodeList || 0 === $nodes->length ) {
+				continue;
+			}
+
+			$matched_examples = array();
+			foreach ( $nodes as $node ) {
+				if ( ! $node instanceof DOMElement ) {
+					continue;
+				}
+
+				$children = mcp_abilities_gutenberg_get_significant_child_elements( $node );
+				if ( count( $children ) < 2 ) {
+					continue;
+				}
+
+				$previous = mcp_abilities_gutenberg_get_previous_significant_element_sibling( $node );
+				if ( ! $previous instanceof DOMElement ) {
+					continue;
+				}
+
+				$previous_classes = strtolower( (string) $previous->getAttribute( 'class' ) );
+				$has_cta_cluster  = false;
+				if ( false !== strpos( $previous_classes, 'wp-block-buttons' ) || false !== strpos( $previous_classes, 'wp-block-button' ) ) {
+					$has_cta_cluster = true;
+				} else {
+					$cta_nodes = $xpath->query(
+						'.//*[contains(concat(" ", normalize-space(@class), " "), " wp-block-buttons ") or contains(concat(" ", normalize-space(@class), " "), " wp-block-button ")]',
+						$previous
+					);
+					$has_cta_cluster = $cta_nodes instanceof DOMNodeList && $cta_nodes->length > 0;
+				}
+
+				if ( ! $has_cta_cluster ) {
+					continue;
+				}
+
+				$matched_examples[] = mcp_abilities_gutenberg_describe_dom_element( $node );
+			}
+
+			if ( empty( $matched_examples ) ) {
+				continue;
+			}
+
+			$issues[] = array(
+				'type'            => 'followup_cluster_detachment_risk',
+				'severity'        => 'notice',
+				'source'          => $source,
+				'selector'        => mcp_abilities_gutenberg_compact_css_snippet( $selector ),
+				'selectors'       => array( mcp_abilities_gutenberg_compact_css_snippet( $selector ) ),
+				'margin_top_px'   => (int) round( $margin_px ),
+				'examples'        => array_values( array_unique( array_slice( $matched_examples, 0, 4 ) ) ),
+				'message'         => 'A follow-up support cluster sits noticeably below the CTA cluster above it. When proof rows, metadata strips, or support items belong to the same selling moment, too much local gap makes them feel detached.',
+			);
+		}
+	}
+
+	return $issues;
 }
 
 /**
@@ -5259,7 +5452,7 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 
 	foreach ( is_array( $layout_risks['issues'] ?? null ) ? $layout_risks['issues'] : array() as $issue ) {
 		$type = (string) ( $issue['type'] ?? '' );
-		if ( in_array( $type, array( 'section_width_inconsistency_risk', 'sibling_treatment_inconsistency', 'row_treatment_inconsistency', 'repeated_object_treatment_inconsistency', 'noninteractive_control_affordance_risk', 'spacing_rhythm_drift', 'alignfull_breakout_risk', 'button_contrast_risk', 'trailing_content_gap_risk', 'design_token_sprawl', 'card_monotony_risk' ), true ) ) {
+		if ( in_array( $type, array( 'section_width_inconsistency_risk', 'sibling_treatment_inconsistency', 'row_treatment_inconsistency', 'repeated_object_treatment_inconsistency', 'followup_cluster_detachment_risk', 'noninteractive_control_affordance_risk', 'spacing_rhythm_drift', 'alignfull_breakout_risk', 'button_contrast_risk', 'trailing_content_gap_risk', 'design_token_sprawl', 'card_monotony_risk' ), true ) ) {
 			$issues[] = $issue;
 		}
 	}
@@ -5301,6 +5494,7 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 		$issues = array_merge(
 			$issues,
 			mcp_abilities_gutenberg_collect_css_noninteractive_control_affordance_issues( $css, $rendered_html, $source ),
+			mcp_abilities_gutenberg_collect_css_followup_cluster_detachment_issues( $css, $rendered_html, $source ),
 			mcp_abilities_gutenberg_collect_css_hero_heading_contrast_issues( $css, $source ),
 			mcp_abilities_gutenberg_collect_css_subtle_tilt_issues( $css, $source ),
 			mcp_abilities_gutenberg_collect_css_repeated_object_treatment_issues( $css, $source )
@@ -5341,6 +5535,8 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 			$score -= 18;
 		} elseif ( 'internal_measure_mismatch' === $type ) {
 			$score -= 14;
+		} elseif ( 'followup_cluster_detachment_risk' === $type ) {
+			$score -= 12;
 		} elseif ( 'sibling_treatment_inconsistency' === $type ) {
 			$score -= 14;
 		} elseif ( 'row_treatment_inconsistency' === $type ) {
@@ -5377,6 +5573,9 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 	if ( in_array( 'internal_measure_mismatch', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'When a section shares the page width, do not quietly cap the quote, text lane, or nested columns row inside it to a much narrower measure unless that asymmetry is very clearly intentional.';
 		$recommendations[] = 'In split editorial layouts, a shorter support column often needs vertical centering and a structural full-height divider. Otherwise the section can look abandoned even when the outer wrapper width is correct.';
+	}
+	if ( in_array( 'followup_cluster_detachment_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Keep follow-up proof rows, metadata strips, and support clusters visually attached to the CTA or copy they belong to. If the gap gets too loose, the cluster stops feeling like part of the same selling moment.';
 	}
 	if ( in_array( 'sibling_treatment_inconsistency', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'When a repeated row uses accent styling such as tilt, shadow, or background shifts, either style all siblings coherently or make one spotlight card obviously intentional.';
@@ -5465,6 +5664,24 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 					'Do not declare a quiet text max-width or leave a nested `.wp-block-columns` row at Gutenberg\'s smaller default measure inside a newly widened section and assume the problem is solved. The usable measure matters as much as the wrapper.',
 					'In two-column editorial sections, vertically center the smaller support column when its content is much shorter than the dominant column. Top alignment often makes the short column look stranded.',
 					'If the split layout uses a divider, attach it to the column or section structure so it spans the intended full height. A border on a short inner text wrapper usually makes the divider look accidentally truncated.',
+				),
+			);
+		} elseif ( 'followup_cluster_detachment_risk' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values(
+					array_filter(
+						array_merge(
+							array( (string) ( $issue['selector'] ?? '' ) ),
+							array_values( array_map( 'strval', is_array( $issue['examples'] ?? null ) ? $issue['examples'] : array() ) )
+						)
+					)
+				),
+				'problem'      => 'A follow-up proof row or support cluster sits too far below the CTA or copy it belongs to, so the component feels split into separate moments.',
+				'fixes'        => array(
+					'Tighten the local top spacing so the support row reads as part of the same cluster rather than a detached afterthought.',
+					'Use a compact gap for CTA-to-proof transitions inside a hero or intro. Save larger gaps for real section breaks.',
+					'If the support row needs stronger separation, give it a clearer structural reason such as a contrasting surface or deliberate section wrapper instead of only empty air.',
 				),
 			);
 		} elseif ( 'sibling_treatment_inconsistency' === $type ) {
