@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.19.9
+Stable tag: 0.20.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,9 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.0 =
+* Teach design evaluation to recognize generic shell/container/wrapper selectors as real page-width anchors, so underused inner text lanes are compared against the actual usable shell width instead of slipping through as false passes.
 
 = 0.19.9 =
 * Added `fullwidth_section_seam_gap_risk` so `gutenberg/evaluate-design` can flag default flow-layout seams between adjacent full-width sections that should visually touch.

@@ -163,6 +163,10 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.20.0
+
+- Teach design evaluation to recognize generic shell/container/wrapper selectors as real page-width anchors, so underused inner text lanes are measured against the actual shell instead of being ignored.
+
 ### 0.19.9
 
 - Added `fullwidth_section_seam_gap_risk` so `gutenberg/evaluate-design` can flag default flow-layout seams between adjacent full-width sections that should visually touch.
