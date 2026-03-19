@@ -163,6 +163,10 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.20.1
+
+- Parse width and max-width declarations inside CSS functions like `min(...)`, so shell measures such as `width:min(1100px, ...)` count as real page-width anchors during design evaluation.
+
 ### 0.20.0
 
 - Teach design evaluation to recognize generic shell/container/wrapper selectors as real page-width anchors, so underused inner text lanes are measured against the actual shell instead of being ignored.

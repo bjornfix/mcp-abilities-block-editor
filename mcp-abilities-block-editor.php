@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.0
+ * Version: 0.20.1
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -2751,6 +2751,55 @@ function mcp_abilities_gutenberg_selector_targets_content_measure( string $selec
 /**
  * Extract fixed content-measure declarations from CSS.
  *
+ * @param string   $declarations CSS declaration block.
+ * @param string[] $allowed_units Allowed measurement units.
+ * @return array<int,array{property:string,value:float,unit:string}>
+ */
+function mcp_abilities_gutenberg_extract_css_measure_declarations( string $declarations, array $allowed_units ): array {
+	$measures = array();
+
+	if ( '' === trim( $declarations ) ) {
+		return $measures;
+	}
+
+	if ( ! preg_match_all( '/\b(max-width|width)\s*:\s*([^;]+)\s*;?/i', $declarations, $matches, PREG_SET_ORDER ) ) {
+		return $measures;
+	}
+
+	foreach ( $matches as $match ) {
+		$property   = strtolower( (string) ( $match[1] ?? '' ) );
+		$expression = (string) ( $match[2] ?? '' );
+		if ( '' === $property || '' === trim( $expression ) ) {
+			continue;
+		}
+
+		if ( ! preg_match( '/([0-9]+(?:\.[0-9]+)?)(px|rem|ch)\b/i', $expression, $value_match ) ) {
+			continue;
+		}
+
+		$unit = strtolower( (string) ( $value_match[2] ?? '' ) );
+		if ( '' === $unit || ! in_array( $unit, $allowed_units, true ) ) {
+			continue;
+		}
+
+		$value = (float) ( $value_match[1] ?? 0 );
+		if ( $value <= 0 ) {
+			continue;
+		}
+
+		$measures[] = array(
+			'property' => $property,
+			'value'    => $value,
+			'unit'     => $unit,
+		);
+	}
+
+	return $measures;
+}
+
+/**
+ * Extract fixed content-measure declarations from CSS.
+ *
  * @param string $css CSS to inspect.
  * @param string $source Source label.
  * @return array<int,array<string,mixed>>
@@ -2773,17 +2822,10 @@ function mcp_abilities_gutenberg_collect_css_content_measures( string $css, stri
 			continue;
 		}
 
-		if ( ! preg_match_all( '/\b(max-width|width)\s*:\s*([0-9]+(?:\.[0-9]+)?)(px|rem)\b/i', $declarations, $matches, PREG_SET_ORDER ) ) {
-			continue;
-		}
-
-		foreach ( $matches as $match ) {
-			$property = strtolower( (string) ( $match[1] ?? '' ) );
-			$value    = (float) ( $match[2] ?? 0 );
-			$unit     = strtolower( (string) ( $match[3] ?? '' ) );
-			if ( $value <= 0 || '' === $unit ) {
-				continue;
-			}
+		foreach ( mcp_abilities_gutenberg_extract_css_measure_declarations( $declarations, array( 'px', 'rem' ) ) as $match ) {
+			$property = (string) $match['property'];
+			$value    = (float) $match['value'];
+			$unit     = (string) $match['unit'];
 
 			$value_px = 'rem' === $unit ? $value * 16 : $value;
 			if ( $value_px < 320 || $value_px > 1800 ) {
@@ -2898,17 +2940,10 @@ function mcp_abilities_gutenberg_collect_css_text_measures( string $css, string 
 			continue;
 		}
 
-		if ( ! preg_match_all( '/\b(max-width|width)\s*:\s*([0-9]+(?:\.[0-9]+)?)(px|rem|ch)\b/i', $declarations, $matches, PREG_SET_ORDER ) ) {
-			continue;
-		}
-
-		foreach ( $matches as $match ) {
-			$property = strtolower( (string) ( $match[1] ?? '' ) );
-			$value    = (float) ( $match[2] ?? 0 );
-			$unit     = strtolower( (string) ( $match[3] ?? '' ) );
-			if ( $value <= 0 || '' === $unit ) {
-				continue;
-			}
+		foreach ( mcp_abilities_gutenberg_extract_css_measure_declarations( $declarations, array( 'px', 'rem', 'ch' ) ) as $match ) {
+			$property = (string) $match['property'];
+			$value    = (float) $match['value'];
+			$unit     = (string) $match['unit'];
 
 			if ( 'rem' === $unit ) {
 				$value_px = $value * 16;
@@ -2965,17 +3000,10 @@ function mcp_abilities_gutenberg_collect_css_nested_container_measures( string $
 			continue;
 		}
 
-		if ( ! preg_match_all( '/\b(max-width|width)\s*:\s*([0-9]+(?:\.[0-9]+)?)(px|rem)\b/i', $declarations, $matches, PREG_SET_ORDER ) ) {
-			continue;
-		}
-
-		foreach ( $matches as $match ) {
-			$property = strtolower( (string) ( $match[1] ?? '' ) );
-			$value    = (float) ( $match[2] ?? 0 );
-			$unit     = strtolower( (string) ( $match[3] ?? '' ) );
-			if ( $value <= 0 || '' === $unit ) {
-				continue;
-			}
+		foreach ( mcp_abilities_gutenberg_extract_css_measure_declarations( $declarations, array( 'px', 'rem' ) ) as $match ) {
+			$property = (string) $match['property'];
+			$value    = (float) $match['value'];
+			$unit     = (string) $match['unit'];
 
 			$value_px = 'rem' === $unit ? $value * 16 : $value;
 			if ( $value_px < 320 || $value_px > 1800 ) {

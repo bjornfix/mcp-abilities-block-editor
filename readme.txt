@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.20.0
+Stable tag: 0.20.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,9 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.1 =
+* Parse width and max-width declarations inside CSS functions like `min(...)`, so shell measures such as `width:min(1100px, ...)` now count as real layout anchors during design evaluation.
 
 = 0.20.0 =
 * Teach design evaluation to recognize generic shell/container/wrapper selectors as real page-width anchors, so underused inner text lanes are compared against the actual usable shell width instead of slipping through as false passes.
