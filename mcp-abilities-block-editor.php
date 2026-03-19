@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.1
+ * Version: 0.20.2
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -2580,6 +2580,7 @@ function mcp_abilities_gutenberg_is_blocking_design_issue( string $type ): bool 
 		array(
 			'section_width_inconsistency_risk',
 			'internal_measure_mismatch',
+			'support_module_cramp_risk',
 			'followup_cluster_detachment_risk',
 			'fullwidth_section_seam_gap_risk',
 			'row_treatment_inconsistency',
@@ -2590,6 +2591,22 @@ function mcp_abilities_gutenberg_is_blocking_design_issue( string $type ): bool 
 		),
 		true
 	);
+}
+
+/**
+ * Count words in a rendered text snippet.
+ *
+ * @param string $text Raw text.
+ * @return int
+ */
+function mcp_abilities_gutenberg_count_words( string $text ): int {
+	$text = trim( preg_replace( '/\s+/u', ' ', wp_strip_all_tags( $text ) ) );
+	if ( '' === $text ) {
+		return 0;
+	}
+
+	$parts = preg_split( '/\s+/u', $text );
+	return is_array( $parts ) ? count( array_filter( $parts, 'strlen' ) ) : 0;
 }
 
 /**
@@ -4622,6 +4639,167 @@ function mcp_abilities_gutenberg_collect_rendered_row_treatment_issues( string $
 }
 
 /**
+ * Detect rendered support rows that pack too many text-bearing modules into a narrow horizontal rhythm.
+ *
+ * @param string $html Rendered Gutenberg HTML.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_rendered_support_module_cramp_issues( string $html, string $source ): array {
+	if ( '' === trim( $html ) ) {
+		return array();
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-design-root">' . $html . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array();
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-design-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( ! $root instanceof DOMElement ) {
+		return array();
+	}
+
+	$issues = array();
+	$seen   = array();
+
+	$row_nodes = $xpath->query(
+		'.//*[contains(concat(" ", normalize-space(@class), " "), " wp-block-columns ")
+			or contains(translate(@class, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "row")
+			or contains(translate(@class, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "strip")
+			or contains(translate(@class, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "grid")
+			or contains(translate(@class, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "items")
+			or contains(translate(@class, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "proof")
+			or contains(translate(@class, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "process")]',
+		$root
+	);
+	if ( ! $row_nodes instanceof DOMNodeList || 0 === $row_nodes->length ) {
+		return array();
+	}
+
+	foreach ( $row_nodes as $row ) {
+		if ( ! $row instanceof DOMElement ) {
+			continue;
+		}
+
+		$row_selector = mcp_abilities_gutenberg_describe_dom_element( $row );
+		if ( isset( $seen[ $row_selector ] ) ) {
+			continue;
+		}
+
+		$children = array();
+		$row_class = ' ' . strtolower( trim( (string) $row->getAttribute( 'class' ) ) ) . ' ';
+		$is_columns_row = false !== strpos( $row_class, ' wp-block-columns ' );
+
+		foreach ( $row->childNodes as $child_node ) {
+			if ( ! $child_node instanceof DOMElement ) {
+				continue;
+			}
+
+			if ( $is_columns_row ) {
+				$child_class = ' ' . strtolower( trim( (string) $child_node->getAttribute( 'class' ) ) ) . ' ';
+				if ( false === strpos( $child_class, ' wp-block-column ' ) ) {
+					continue;
+				}
+			}
+
+			$children[] = $child_node;
+		}
+
+		if ( ! $is_columns_row ) {
+			$children = mcp_abilities_gutenberg_get_significant_child_elements( $row );
+		}
+
+		$child_count = count( $children );
+		if ( $child_count < 3 || $child_count > 4 ) {
+			continue;
+		}
+
+		$word_counts      = array();
+		$examples         = array();
+		$heading_like     = 0;
+		$body_like        = 0;
+
+		foreach ( $children as $child ) {
+			if ( ! $child instanceof DOMElement ) {
+				continue;
+			}
+
+			$text = trim( preg_replace( '/\s+/u', ' ', (string) $child->textContent ) );
+			$word_count = mcp_abilities_gutenberg_count_words( $text );
+			if ( $word_count <= 0 ) {
+				continue;
+			}
+
+			$word_counts[] = $word_count;
+			$examples[]    = mcp_abilities_gutenberg_describe_dom_element( $child );
+
+			$heading_nodes = $xpath->query( './/h2|.//h3|.//h4|.//h5|.//h6|.//strong', $child );
+			if ( $heading_nodes instanceof DOMNodeList && $heading_nodes->length > 0 ) {
+				++$heading_like;
+			}
+
+			$paragraph_nodes = $xpath->query( './/p|.//span|.//li', $child );
+			if ( $paragraph_nodes instanceof DOMNodeList && $paragraph_nodes->length > 0 ) {
+				++$body_like;
+			}
+		}
+
+		if ( count( $word_counts ) !== $child_count ) {
+			continue;
+		}
+
+		$avg_words = array_sum( $word_counts ) / $child_count;
+		$max_words = max( $word_counts );
+		$min_words = min( $word_counts );
+
+		$is_support_family = $heading_like >= max( 2, $child_count - 1 ) || $body_like >= max( 2, $child_count - 1 );
+		if ( ! $is_support_family ) {
+			continue;
+		}
+
+		$is_cramped = false;
+		if ( 4 === $child_count && $avg_words >= 12 ) {
+			$is_cramped = true;
+		} elseif ( 3 === $child_count && $avg_words >= 9 ) {
+			$is_cramped = true;
+		} elseif ( $max_words >= 24 && $child_count >= 3 ) {
+			$is_cramped = true;
+		}
+
+		if ( ! $is_cramped ) {
+			continue;
+		}
+
+		$seen[ $row_selector ] = true;
+		$issues[] = array(
+			'type'              => 'support_module_cramp_risk',
+			'severity'          => 'notice',
+			'source'            => $source,
+			'selector'          => $row_selector,
+			'selectors'         => array( $row_selector ),
+			'row_size'          => $child_count,
+			'average_words'     => (int) round( $avg_words ),
+			'max_words'         => (int) $max_words,
+			'min_words'         => (int) $min_words,
+			'examples'          => array_values( array_unique( array_slice( $examples, 0, 4 ) ) ),
+			'message'           => 'A support row packs too many text-bearing sibling modules into one horizontal lane. Even without explicit width caps, the row can still feel too narrow because each module gets too little usable width for its copy load.',
+		);
+	}
+
+	return $issues;
+}
+
+/**
  * Build a compact structural signature for a rendered module.
  *
  * @param DOMElement $element Element to describe.
@@ -5621,7 +5799,7 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 
 	foreach ( is_array( $layout_risks['issues'] ?? null ) ? $layout_risks['issues'] : array() as $issue ) {
 		$type = (string) ( $issue['type'] ?? '' );
-		if ( in_array( $type, array( 'section_width_inconsistency_risk', 'sibling_treatment_inconsistency', 'row_treatment_inconsistency', 'repeated_object_treatment_inconsistency', 'followup_cluster_detachment_risk', 'fullwidth_section_seam_gap_risk', 'noninteractive_control_affordance_risk', 'spacing_rhythm_drift', 'alignfull_breakout_risk', 'button_contrast_risk', 'trailing_content_gap_risk', 'design_token_sprawl', 'card_monotony_risk' ), true ) ) {
+		if ( in_array( $type, array( 'section_width_inconsistency_risk', 'sibling_treatment_inconsistency', 'row_treatment_inconsistency', 'repeated_object_treatment_inconsistency', 'support_module_cramp_risk', 'followup_cluster_detachment_risk', 'fullwidth_section_seam_gap_risk', 'noninteractive_control_affordance_risk', 'spacing_rhythm_drift', 'alignfull_breakout_risk', 'button_contrast_risk', 'trailing_content_gap_risk', 'design_token_sprawl', 'card_monotony_risk' ), true ) ) {
 			$issues[] = $issue;
 		}
 	}
@@ -5678,6 +5856,7 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 		mcp_abilities_gutenberg_collect_internal_measure_mismatch_risks( $content_measures, array_merge( $text_measures, $nested_container_measures ), 'embedded-style-blocks' ),
 		mcp_abilities_gutenberg_collect_block_spacing_rhythm_issues( $content ),
 		mcp_abilities_gutenberg_collect_rendered_fullwidth_seam_gap_issues( $rendered_html, implode( "\n", array_map( static function ( array $entry ): string { return (string) ( $entry['css'] ?? '' ); }, array_values( $embedded_css_entries ) ) ), 'rendered-html' ),
+		mcp_abilities_gutenberg_collect_rendered_support_module_cramp_issues( $rendered_html, 'rendered-html' ),
 		mcp_abilities_gutenberg_collect_rendered_row_treatment_issues( $rendered_html, 'rendered-html' ),
 		mcp_abilities_gutenberg_collect_repeated_object_treatment_issues( $rendered_html, 'rendered-html' ),
 		mcp_abilities_gutenberg_collect_rendered_boxed_module_issues( $rendered_html, 'rendered-html' )
@@ -5705,6 +5884,8 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 			$score -= 18;
 		} elseif ( 'internal_measure_mismatch' === $type ) {
 			$score -= 14;
+		} elseif ( 'support_module_cramp_risk' === $type ) {
+			$score -= 16;
 		} elseif ( 'followup_cluster_detachment_risk' === $type ) {
 			$score -= 12;
 		} elseif ( 'fullwidth_section_seam_gap_risk' === $type ) {
@@ -5745,6 +5926,9 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 	if ( in_array( 'internal_measure_mismatch', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'When a section shares the page width, do not quietly cap the quote, text lane, or nested columns row inside it to a much narrower measure unless that asymmetry is very clearly intentional.';
 		$recommendations[] = 'In split editorial layouts, a shorter support column often needs vertical centering and a structural full-height divider. Otherwise the section can look abandoned even when the outer wrapper width is correct.';
+	}
+	if ( in_array( 'support_module_cramp_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Do not cram support modules into more columns than the copy can comfortably carry. Process rows, proof strips, and benefit rows should use fewer columns or larger modules when the text starts feeling pinched.';
 	}
 	if ( in_array( 'followup_cluster_detachment_risk', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'Keep follow-up proof rows, metadata strips, and support clusters visually attached to the CTA or copy they belong to. If the gap gets too loose, the cluster stops feeling like part of the same selling moment.';
@@ -5839,6 +6023,24 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 					'Do not declare a quiet text max-width or leave a nested `.wp-block-columns` row at Gutenberg\'s smaller default measure inside a newly widened section and assume the problem is solved. The usable measure matters as much as the wrapper.',
 					'In two-column editorial sections, vertically center the smaller support column when its content is much shorter than the dominant column. Top alignment often makes the short column look stranded.',
 					'If the split layout uses a divider, attach it to the column or section structure so it spans the intended full height. A border on a short inner text wrapper usually makes the divider look accidentally truncated.',
+				),
+			);
+		} elseif ( 'support_module_cramp_risk' === $type ) {
+			$suggestions[] = array(
+				'type'      => $type,
+				'selectors' => array_values(
+					array_filter(
+						array_merge(
+							array( (string) ( $issue['selector'] ?? '' ) ),
+							array_values( array_map( 'strval', is_array( $issue['examples'] ?? null ) ? $issue['examples'] : array() ) )
+						)
+					)
+				),
+				'problem'   => 'A support row is trying to carry too much copy in too many side-by-side modules, so the row reads cramped even though the page shell is wide enough.',
+				'fixes'     => array(
+					'Reduce the number of columns in that row, especially for process steps, proof strips, and benefit rows with both a heading and a body line.',
+					'Let support modules grow wider before adding more siblings. Three or four modules across is only safe when each item is genuinely brief.',
+					'If the row needs to keep the same item count, shorten the copy sharply or split the row into two calmer lines instead of forcing every module to stay narrow.',
 				),
 			);
 		} elseif ( 'followup_cluster_detachment_risk' === $type ) {

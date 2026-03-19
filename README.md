@@ -163,6 +163,10 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.20.2
+
+- Add `support_module_cramp_risk` so the evaluator can flag process rows, proof strips, and similar support modules that still feel too narrow because too many text-bearing items are forced into one line.
+
 ### 0.20.1
 
 - Parse width and max-width declarations inside CSS functions like `min(...)`, so shell measures such as `width:min(1100px, ...)` count as real page-width anchors during design evaluation.
