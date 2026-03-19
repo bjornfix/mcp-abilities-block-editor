@@ -163,6 +163,11 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.20.6
+
+- Tighten `alignfull_breakout_risk` so custom page-level width systems with multiple `alignfull` sections now fail unless the content explicitly neutralizes Gutenberg breakout margins.
+- Expand block guidance so AI clients know to neutralize `alignfull` or switch to non-breakout full-width wrappers when a page introduces its own shell sizing.
+
 ### 0.20.4
 
 - Add `faq_schema_missing_risk` so the design evaluator can fail visually real FAQ sections that still lack matching FAQ schema.

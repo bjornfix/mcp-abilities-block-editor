@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.4
+ * Version: 0.20.6
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -476,12 +476,28 @@ function mcp_abilities_gutenberg_block_guidance_catalog(): array {
 			'notes'        => 'If each proof point says something real, give it a calm vertical stack: label first, explanation below. Treat it like an open proof list, not like compressed metadata.',
 		),
 		array(
+			'scenario'     => 'Support card ending with short proof statements',
+			'best_block'   => 'core/group',
+			'alternatives' => array( 'core/list', 'core/paragraph' ),
+			'use_when'     => 'Use when a support card ends with two to four short reassurance or working-style statements that belong to the same card, not to a separate section below it.',
+			'avoid_when'   => 'Avoid leaving the statements as one loose bottom paragraph, shrinking them below the surrounding text floor, or decorating them with fussy marker clutter that adds more styling than meaning.',
+			'notes'        => 'Treat the ending as a labeled micro-proof stack: a quiet label, simple vertical rows, and enough width for each support line to breathe across the card. Keep the support text on the same readable floor as the surrounding body copy instead of making the card footer quietly smaller.',
+		),
+		array(
 			'scenario'     => 'Adjacent full-width sections that should visually touch',
 			'best_block'   => 'core/group',
 			'alternatives' => array( 'core/cover', 'core/group' ),
 			'use_when'     => 'Use when stacking a hero, band, strip, or other full-width sections with no intended seam between them.',
 			'avoid_when'   => 'Avoid relying on the default flow gap between adjacent full-width sections when the design expects edge-to-edge continuity.',
 			'notes'        => 'In flow layouts, WordPress can inject a default seam between stacked sections. If the visual intent is a continuous transition, neutralize that seam explicitly instead of letting a bright strip appear by accident.',
+		),
+		array(
+			'scenario'     => 'Custom page-level CSS with alignfull Gutenberg sections',
+			'best_block'   => 'core/group',
+			'alternatives' => array( 'core/cover', 'core/group' ),
+			'use_when'     => 'Use when a page has its own shell or width system and also stacks Gutenberg `alignfull` sections such as heroes, bands, or footers.',
+			'avoid_when'   => 'Avoid leaving `alignfull` on default breakout math once the page has custom width rules, shell sizing, or full-width wrapper logic of its own.',
+			'notes'        => 'If the page defines its own width system, neutralize `alignfull` margins explicitly or switch to non-breakout full-width wrappers. Otherwise browser-specific scrollbar width can create horizontal rails even when the page appears fine at first glance.',
 		),
 		array(
 			'scenario'     => 'Image with optional caption',
@@ -5409,6 +5425,7 @@ function mcp_abilities_gutenberg_collect_content_layout_risks( string $content )
 	$embedded_style_block_count = 0;
 	$content_measures         = array();
 	$full_width_shell_css_snippets = array();
+	$alignfull_neutralization_snippets = array();
 	$style_nodes              = $xpath->query( './/style', $root );
 
 	if ( $style_nodes instanceof DOMNodeList && $style_nodes->length > 0 ) {
@@ -5428,6 +5445,10 @@ function mcp_abilities_gutenberg_collect_content_layout_risks( string $content )
 			$full_width_shell_css_snippets = array_merge(
 				$full_width_shell_css_snippets,
 				mcp_abilities_gutenberg_detect_full_width_shell_css_snippets( $css )
+			);
+			$alignfull_neutralization_snippets = array_merge(
+				$alignfull_neutralization_snippets,
+				mcp_abilities_gutenberg_detect_alignfull_neutralization_css_snippets( $css )
 			);
 			$content_measures = array_merge(
 				$content_measures,
@@ -5472,12 +5493,14 @@ function mcp_abilities_gutenberg_collect_content_layout_risks( string $content )
 	}
 
 	$full_width_shell_css_snippets = array_values( array_unique( $full_width_shell_css_snippets ) );
+	$alignfull_neutralization_snippets = array_values( array_unique( $alignfull_neutralization_snippets ) );
 	$alignfull_nodes = $xpath->query(
 		'.//*[contains(concat(" ", normalize-space(@class), " "), " alignfull ")]',
 		$root
 	);
 	$alignfull_count = $alignfull_nodes instanceof DOMNodeList ? $alignfull_nodes->length : 0;
-	if ( $alignfull_count > 0 && ! empty( $full_width_shell_css_snippets ) ) {
+	$has_custom_width_system = ! empty( $content_measures ) || ! empty( $full_width_shell_css_snippets );
+	if ( $alignfull_count > 0 && $has_custom_width_system && empty( $alignfull_neutralization_snippets ) ) {
 		$selectors = array();
 		for ( $index = 0; $index < min( 3, $alignfull_count ); $index++ ) {
 			$alignfull_node = $alignfull_nodes->item( $index );
@@ -5491,8 +5514,8 @@ function mcp_abilities_gutenberg_collect_content_layout_risks( string $content )
 			'severity'  => 'warning',
 			'count'     => $alignfull_count,
 			'selectors' => $selectors,
-			'snippets'  => array_slice( $full_width_shell_css_snippets, 0, 3 ),
-			'message'   => 'Content mixes alignfull Gutenberg blocks with CSS that already forces the surrounding shell to full width; theme breakout margins can then create horizontal page scrolling. Prefer neutralized alignfull margins or non-breakout full-width wrappers.',
+			'snippets'  => array_slice( array_merge( $full_width_shell_css_snippets, array_map( static function ( array $entry ): string { return (string) ( $entry['value'] ?? '' ); }, array_values( $content_measures ) ) ), 0, 4 ),
+			'message'   => 'Content mixes alignfull Gutenberg blocks with custom page-width CSS but does not explicitly neutralize alignfull breakout margins. That can create browser-dependent horizontal scrolling even when the page mostly looks correct. Prefer neutralized alignfull margins or non-breakout full-width wrappers.',
 		);
 	}
 
@@ -5521,6 +5544,31 @@ function mcp_abilities_gutenberg_detect_full_width_shell_css_snippets( string $c
 	$patterns = array(
 		'/(?:main|\.site-main|\.page-content|\.entry-content)[^{]*\{[^}]*max-width\s*:\s*none[^}]*width\s*:\s*100%[^}]*\}/i',
 		'/(?:main|\.site-main)[^{]*\{[^}]*margin\s*:\s*0[^}]*max-width\s*:\s*none[^}]*\}/i',
+	);
+
+	foreach ( $patterns as $pattern ) {
+		if ( preg_match_all( $pattern, $css, $matches ) ) {
+			foreach ( $matches[0] as $match ) {
+				$snippets[] = mcp_abilities_gutenberg_compact_css_snippet( (string) $match );
+			}
+		}
+	}
+
+	return array_values( array_unique( $snippets ) );
+}
+
+/**
+ * Detect CSS that explicitly neutralizes Gutenberg alignfull breakout margins.
+ *
+ * @param string $css CSS to inspect.
+ * @return array<int,string>
+ */
+function mcp_abilities_gutenberg_detect_alignfull_neutralization_css_snippets( string $css ): array {
+	$snippets = array();
+	$patterns = array(
+		'/\.alignfull[^{]*\{[^}]*margin-left\s*:\s*0[^}]*margin-right\s*:\s*0[^}]*\}/i',
+		'/\.alignfull[^{]*\{[^}]*width\s*:\s*100%[^}]*max-width\s*:\s*none[^}]*\}/i',
+		'/\.alignfull[^{]*\{[^}]*max-width\s*:\s*none[^}]*width\s*:\s*100%[^}]*\}/i',
 	);
 
 	foreach ( $patterns as $pattern ) {
@@ -6229,6 +6277,7 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 	}
 	if ( in_array( 'support_module_cramp_risk', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'Do not cram support modules into more columns than the copy can comfortably carry. Process rows, proof strips, and benefit rows should use fewer columns or larger modules when the text starts feeling pinched.';
+		$recommendations[] = 'When short reassurance statements live inside a support card, let them stack calmly and use the available card width. Do not force them into cramped mini-rows or treat them like compressed footer metadata.';
 	}
 	if ( in_array( 'followup_cluster_detachment_risk', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'Keep follow-up proof rows, metadata strips, and support clusters visually attached to the CTA or copy they belong to. If the gap gets too loose, the cluster stops feeling like part of the same selling moment.';
@@ -6250,6 +6299,7 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 	}
 	if ( in_array( 'noninteractive_control_affordance_risk', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'Do not style non-clickable labels, tags, or proof chips like buttons. If an element is not interactive, it should read as metadata or supporting proof, not as a tappable control. If it occupies real visual space, give it enough explanatory substance to justify that prominence.';
+		$recommendations[] = 'If a card ends with short parallel proof statements, prefer a calm labeled micro-proof stack over decorative icons, chip rails, or fake CTA markers.';
 	}
 	if ( in_array( 'spacing_rhythm_drift', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'Reuse a smaller set of vertical spacing distances between major sections. Balanced pages usually feel tighter when they alternate between a compact gap and a generous gap instead of inventing a new distance every time.';
@@ -6344,6 +6394,7 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 					'Reduce the number of columns in that row, especially for process steps, proof strips, and benefit rows with both a heading and a body line.',
 					'Let support modules grow wider before adding more siblings. Three or four modules across is only safe when each item is genuinely brief.',
 					'If the row needs to keep the same item count, shorten the copy sharply or split the row into two calmer lines instead of forcing every module to stay narrow.',
+					'Inside a support card, turn short parallel proof statements into a simple stacked micro-list and let each support line use the full card width instead of squeezing it into a mini-grid.',
 				),
 			);
 		} elseif ( 'followup_cluster_detachment_risk' === $type ) {
@@ -6457,6 +6508,7 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 					'If the row is visually prominent, upgrade bare labels into a short proof strip with one useful supporting line per item.',
 					'Reserve filled pill/button treatments for real links, filters, toggles, and calls to action.',
 					'If the labels genuinely need interaction, turn them into actual links or controls instead of keeping them inert.',
+					'When these proof statements live inside a support card, use a small label plus calm stacked rows instead of decorative markers or loose bold line breaks.',
 				),
 			);
 		} elseif ( 'spacing_rhythm_drift' === $type ) {
