@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.19.6
+ * Version: 0.19.7
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -457,7 +457,7 @@ function mcp_abilities_gutenberg_block_guidance_catalog(): array {
 			'alternatives' => array( 'core/list', 'core/group' ),
 			'use_when'     => 'Use for short non-interactive proof points such as scope labels, guarantees, or service metadata that sit near a hero or intro.',
 			'avoid_when'   => 'Avoid styling inert labels to look like buttons, pills, or controls when nothing happens on click.',
-			'notes'        => 'If the items are not links or controls, keep them visually quieter than the real CTA. Let them read as metadata, proof, or supporting context rather than fake actions.',
+			'notes'        => 'If the items are not links or controls, keep them visually quieter than the real CTA. If they take up meaningful space, make them earn it with a short proof strip or concise supporting line rather than naked label chips.',
 		),
 		array(
 			'scenario'     => 'Image with optional caption',
@@ -5388,7 +5388,7 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 		$recommendations[] = 'When the same object repeats, keep its containment treatment coherent. Do not let one instance become boxed, tinted, or elevated while the matching instance stays plain unless one is intentionally featured.';
 	}
 	if ( in_array( 'noninteractive_control_affordance_risk', $signals['issue_types'], true ) ) {
-		$recommendations[] = 'Do not style non-clickable labels, tags, or proof chips like buttons. If an element is not interactive, it should read as metadata or supporting proof, not as a tappable control.';
+		$recommendations[] = 'Do not style non-clickable labels, tags, or proof chips like buttons. If an element is not interactive, it should read as metadata or supporting proof, not as a tappable control. If it occupies real visual space, give it enough explanatory substance to justify that prominence.';
 	}
 	if ( in_array( 'spacing_rhythm_drift', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'Reuse a smaller set of vertical spacing distances between major sections. Balanced pages usually feel tighter when they alternate between a compact gap and a generous gap instead of inventing a new distance every time.';
@@ -5528,6 +5528,7 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 				'problem'      => 'Non-interactive labels are borrowing the visual language of buttons or pills, so they imply an action that does not exist.',
 				'fixes'        => array(
 					'Quiet the styling so the tokens read as metadata, scope labels, or proof instead of controls.',
+					'If the row is visually prominent, upgrade bare labels into a short proof strip with one useful supporting line per item.',
 					'Reserve filled pill/button treatments for real links, filters, toggles, and calls to action.',
 					'If the labels genuinely need interaction, turn them into actual links or controls instead of keeping them inert.',
 				),

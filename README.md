@@ -163,6 +163,11 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.19.7
+
+- Expanded non-interactive proof guidance so visually prominent proof rows are expected to carry useful supporting lines instead of bare label chips.
+- Expanded design-fix suggestions so fake-button issues can be resolved by converting empty tokens into short proof strips, not just by flattening the styling.
+
 ### 0.19.6
 
 - Added `noninteractive_control_affordance_risk` so `gutenberg/evaluate-design` can flag inert labels or proof chips that are styled like clickable controls.
