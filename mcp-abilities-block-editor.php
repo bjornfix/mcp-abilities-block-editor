@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.13.0
+ * Version: 0.19.6
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -452,6 +452,14 @@ function mcp_abilities_gutenberg_block_guidance_catalog(): array {
 			'notes'        => 'Use the buttons container even for one button so layout stays extensible.',
 		),
 		array(
+			'scenario'     => 'Short proof labels, service tags, or metadata that are not clickable',
+			'best_block'   => 'core/paragraph',
+			'alternatives' => array( 'core/list', 'core/group' ),
+			'use_when'     => 'Use for short non-interactive proof points such as scope labels, guarantees, or service metadata that sit near a hero or intro.',
+			'avoid_when'   => 'Avoid styling inert labels to look like buttons, pills, or controls when nothing happens on click.',
+			'notes'        => 'If the items are not links or controls, keep them visually quieter than the real CTA. Let them read as metadata, proof, or supporting context rather than fake actions.',
+		),
+		array(
 			'scenario'     => 'Image with optional caption',
 			'best_block'   => 'core/image',
 			'alternatives' => array( 'core/gallery', 'core/media-text' ),
@@ -482,6 +490,46 @@ function mcp_abilities_gutenberg_block_guidance_catalog(): array {
 			'use_when'     => 'Use when several blocks belong together semantically or visually.',
 			'avoid_when'   => 'Avoid adding groups with no styling or structural purpose.',
 			'notes'        => 'Group is the safe general-purpose wrapper block.',
+		),
+		array(
+			'scenario'     => 'Keeping a coherent content width rhythm across a multi-section page',
+			'best_block'   => 'core/group',
+			'alternatives' => array( 'core/cover', 'core/columns' ),
+			'use_when'     => 'Use a top-level group or repeated section groups to keep intro panels, cards, quotes, reusable rows, and CTA sections on one primary content measure.',
+			'avoid_when'   => 'Avoid mixing several arbitrary fixed widths for adjacent sections unless the contrast is a deliberate editorial effect.',
+			'notes'        => 'Pick one main content width for interior sections. Let only heroes, strips, and intentional full-bleed sections break that measure. If the page shell is already full width, neutralize alignfull breakout margins instead of stacking another breakout trick on top.',
+		),
+		array(
+			'scenario'     => 'Breaking a page out of repetitive all-card composition',
+			'best_block'   => 'core/group',
+			'alternatives' => array( 'core/separator', 'core/cover', 'core/paragraph' ),
+			'use_when'     => 'Use open groups, text bands, dividers, and occasional full-bleed sections to vary rhythm between contained modules.',
+			'avoid_when'   => 'Avoid wrapping every content beat in another rounded panel, especially when several adjacent sections already have backgrounds, borders, or shadows.',
+			'notes'        => 'Pages usually feel more designed when only a few moments are card-like. Keep some sections open on the page background so the layout can breathe.',
+		),
+		array(
+			'scenario'     => 'Keeping a repeated row coherent without one random boxed sibling',
+			'best_block'   => 'core/columns',
+			'alternatives' => array( 'core/group', 'core/separator' ),
+			'use_when'     => 'Use columns for parallel items, but keep the sibling treatment family consistent across the row unless one item is intentionally a featured spotlight.',
+			'avoid_when'   => 'Avoid turning only one column into a contained card while adjacent siblings stay open unless the featured state is unmistakable.',
+			'notes'        => 'Mixed open-versus-boxed siblings often read as unfinished AI output. Either keep the whole row open, contain the full set, or make the spotlight item clearly dominant.',
+		),
+		array(
+			'scenario'     => 'Keeping balanced vertical spacing between sections',
+			'best_block'   => 'core/group',
+			'alternatives' => array( 'core/separator', 'core/spacer' ),
+			'use_when'     => 'Use section groups with a small shared spacing token set so the page has a repeatable vertical rhythm.',
+			'avoid_when'   => 'Avoid solving every gap with a different spacer height, padding value, or one-off margin unless the break in rhythm is clearly intentional.',
+			'notes'        => 'Balanced pages usually reuse a few section distances, such as one compact gap and one generous gap. Too many unrelated values make the page feel lopsided even when the blocks themselves are fine.',
+		),
+		array(
+			'scenario'     => 'Editorial split layout with one dominant column and one smaller support column',
+			'best_block'   => 'core/columns',
+			'alternatives' => array( 'core/group', 'core/media-text' ),
+			'use_when'     => 'Use for sections where one side carries the main heading or statement and the other side carries shorter supporting copy, notes, or meta context.',
+			'avoid_when'   => 'Avoid leaving the smaller support column top-aligned by default when it is visibly shorter, or attaching the divider to a nested text wrapper that stops halfway down the section.',
+			'notes'        => 'Keep the full section on the shared page width. If one side is much shorter, center that support column vertically so it feels placed rather than abandoned. If you use a divider, anchor it to the column or section structure so it runs the intended full height instead of ending at the text block.',
 		),
 		array(
 			'scenario'     => 'Hero section or text over a visual background',
@@ -566,6 +614,21 @@ function mcp_abilities_gutenberg_get_editable_post( int $post_id ) {
 	$post = get_post( $post_id );
 	if ( ! $post ) {
 		return new WP_Error( 'mcp_gutenberg_post_not_found', 'Post not found.' );
+	}
+
+	if ( defined( 'WP_CLI' ) && WP_CLI && 0 === get_current_user_id() ) {
+		$administrators = get_users(
+			array(
+				'role'    => 'administrator',
+				'number'  => 1,
+				'orderby' => 'ID',
+				'order'   => 'ASC',
+				'fields'  => array( 'ID' ),
+			)
+		);
+		if ( ! empty( $administrators[0]->ID ) ) {
+			wp_set_current_user( (int) $administrators[0]->ID );
+		}
 	}
 
 	if ( ! current_user_can( 'edit_post', $post_id ) ) {
@@ -944,6 +1007,14 @@ function mcp_abilities_gutenberg_save_template_entity( string $post_type, array 
 		);
 	}
 
+	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
+	if ( is_wp_error( $layout_guard ) ) {
+		return array(
+			'success' => false,
+			'message' => $layout_guard->get_error_message(),
+		);
+	}
+
 	$title  = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : 'Untitled';
 	$slug   = isset( $input['slug'] ) ? sanitize_title( (string) $input['slug'] ) : sanitize_title( $title );
 	$status = isset( $input['status'] ) ? sanitize_text_field( (string) $input['status'] ) : 'publish';
@@ -1115,6 +1186,14 @@ function mcp_abilities_gutenberg_save_synced_pattern( array $input ): array {
 		);
 	}
 
+	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
+	if ( is_wp_error( $layout_guard ) ) {
+		return array(
+			'success' => false,
+			'message' => $layout_guard->get_error_message(),
+		);
+	}
+
 	$title   = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : 'Untitled Synced Pattern';
 	$slug    = isset( $input['slug'] ) ? sanitize_title( (string) $input['slug'] ) : sanitize_title( $title );
 	$status  = isset( $input['status'] ) ? sanitize_text_field( (string) $input['status'] ) : 'publish';
@@ -1260,6 +1339,13 @@ function mcp_abilities_gutenberg_extract_synced_pattern( array $input ): array {
 		}
 
 		$content = serialize_blocks( $denormalized );
+		$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
+		if ( is_wp_error( $layout_guard ) ) {
+			return array(
+				'success' => false,
+				'message' => $layout_guard->get_error_message(),
+			);
+		}
 		if ( $post instanceof WP_Post ) {
 			$result = wp_update_post(
 				wp_slash(
@@ -1375,6 +1461,13 @@ function mcp_abilities_gutenberg_insert_synced_pattern_into_post( array $input )
 	}
 
 	$content = serialize_blocks( $denormalized );
+	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
+	if ( is_wp_error( $layout_guard ) ) {
+		return array(
+			'success' => false,
+			'message' => $layout_guard->get_error_message(),
+		);
+	}
 	$result  = wp_update_post(
 		wp_slash(
 			array(
@@ -1522,6 +1615,14 @@ function mcp_abilities_gutenberg_save_navigation_entity( array $input ): array {
 		return array(
 			'success' => false,
 			'message' => 'Provide either content or blocks.',
+		);
+	}
+
+	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
+	if ( is_wp_error( $layout_guard ) ) {
+		return array(
+			'success' => false,
+			'message' => $layout_guard->get_error_message(),
 		);
 	}
 
@@ -2193,6 +2294,2476 @@ function mcp_abilities_gutenberg_describe_dom_element( DOMElement $element ): st
 }
 
 /**
+ * Build a compact CSS snippet for diagnostics.
+ *
+ * @param string $snippet Raw CSS snippet.
+ * @return string
+ */
+function mcp_abilities_gutenberg_compact_css_snippet( string $snippet ): string {
+	$snippet = trim( preg_replace( '/\s+/u', ' ', $snippet ) );
+
+	if ( strlen( $snippet ) > 160 ) {
+		$snippet = substr( $snippet, 0, 157 ) . '...';
+	}
+
+	return $snippet;
+}
+
+/**
+ * Parse a CSS color token into RGB components.
+ *
+ * @param string $value CSS color token.
+ * @return array{r:int,g:int,b:int}|null
+ */
+function mcp_abilities_gutenberg_parse_css_color( string $value ) {
+	$value = strtolower( trim( preg_replace( '/\s*!important\s*$/i', '', $value ) ) );
+	if ( '' === $value ) {
+		return null;
+	}
+
+	if ( preg_match( '/^#([0-9a-f]{3}|[0-9a-f]{6})$/i', $value, $matches ) ) {
+		$hex = strtolower( $matches[1] );
+		if ( 3 === strlen( $hex ) ) {
+			$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+		}
+
+		return array(
+			'r' => hexdec( substr( $hex, 0, 2 ) ),
+			'g' => hexdec( substr( $hex, 2, 2 ) ),
+			'b' => hexdec( substr( $hex, 4, 2 ) ),
+		);
+	}
+
+	if ( preg_match( '/^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i', $value, $matches ) ) {
+		return array(
+			'r' => max( 0, min( 255, (int) $matches[1] ) ),
+			'g' => max( 0, min( 255, (int) $matches[2] ) ),
+			'b' => max( 0, min( 255, (int) $matches[3] ) ),
+		);
+	}
+
+	return null;
+}
+
+/**
+ * Convert simple CSS/Gutenberg spacing values into approximate pixels.
+ *
+ * @param string $value Raw value.
+ * @return float|null
+ */
+function mcp_abilities_gutenberg_parse_spacing_value_to_px( string $value ): ?float {
+	$value = strtolower( trim( $value ) );
+	if ( '' === $value ) {
+		return null;
+	}
+
+	if ( preg_match( '/^([0-9]+(?:\.[0-9]+)?)(px|rem)$/', $value, $matches ) ) {
+		$amount = (float) $matches[1];
+		$unit   = (string) $matches[2];
+
+		return 'rem' === $unit ? $amount * 16 : $amount;
+	}
+
+	return null;
+}
+
+/**
+ * Extract color stops from a CSS gradient or background string.
+ *
+ * @param string $value Background value.
+ * @return array<int,array{r:int,g:int,b:int}>
+ */
+function mcp_abilities_gutenberg_extract_css_color_stops( string $value ): array {
+	$colors = array();
+
+	if ( preg_match_all( '/#(?:[0-9a-f]{3}|[0-9a-f]{6})\b|rgba?\([^)]+\)/i', $value, $matches ) ) {
+		foreach ( $matches[0] as $token ) {
+			$rgb = mcp_abilities_gutenberg_parse_css_color( (string) $token );
+			if ( is_array( $rgb ) ) {
+				$colors[] = $rgb;
+			}
+		}
+	}
+
+	return $colors;
+}
+
+/**
+ * Extract meaningful background color stops for readability checks, ignoring very transparent decoration.
+ *
+ * @param string $value Background value.
+ * @return array<int,array{r:int,g:int,b:int}>
+ */
+function mcp_abilities_gutenberg_extract_css_readability_color_stops( string $value ): array {
+	$colors = array();
+
+	if ( ! preg_match_all( '/#(?:[0-9a-f]{3}|[0-9a-f]{6})\b|rgba?\([^)]+\)/i', $value, $matches ) ) {
+		return $colors;
+	}
+
+	foreach ( $matches[0] as $token ) {
+		$token = trim( (string) $token );
+		if ( preg_match( '/^rgba\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*(0|1|0?\.\d+)\s*\)$/i', $token, $rgba ) ) {
+			$alpha = (float) $rgba[4];
+			if ( $alpha < 0.2 ) {
+				continue;
+			}
+		}
+
+		$rgb = mcp_abilities_gutenberg_parse_css_color( $token );
+		if ( is_array( $rgb ) ) {
+			$colors[] = $rgb;
+		}
+	}
+
+	return $colors;
+}
+
+/**
+ * Normalize a hero selector so shell duplicates collapse to one comparable form.
+ *
+ * @param string $selector Raw selector.
+ * @return string
+ */
+function mcp_abilities_gutenberg_canonicalize_hero_selector( string $selector ): string {
+	$selector = strtolower( trim( $selector ) );
+	$selector = str_replace( '.page-content>', '>', $selector );
+	$selector = str_replace( '.entry-content>', '>', $selector );
+	$selector = preg_replace( '/\s+/', ' ', $selector );
+	return trim( (string) $selector );
+}
+
+/**
+ * Count selector complexity roughly by descendant depth/combinators.
+ *
+ * @param string $selector CSS selector.
+ * @return int
+ */
+function mcp_abilities_gutenberg_measure_selector_complexity( string $selector ): int {
+	$selector = preg_replace( '/\s+/', ' ', trim( $selector ) );
+	if ( '' === $selector ) {
+		return 0;
+	}
+
+	return substr_count( $selector, ' ' ) + substr_count( $selector, '>' ) + substr_count( $selector, '+' ) + substr_count( $selector, '~' );
+}
+
+/**
+ * Convert sRGB channel to linear light.
+ *
+ * @param float $channel Channel value 0-1.
+ * @return float
+ */
+function mcp_abilities_gutenberg_linearize_channel( float $channel ): float {
+	return ( $channel <= 0.03928 ) ? ( $channel / 12.92 ) : pow( ( $channel + 0.055 ) / 1.055, 2.4 );
+}
+
+/**
+ * Compute relative luminance for an RGB color.
+ *
+ * @param array{r:int,g:int,b:int} $rgb RGB values.
+ * @return float
+ */
+function mcp_abilities_gutenberg_relative_luminance( array $rgb ): float {
+	$r = mcp_abilities_gutenberg_linearize_channel( $rgb['r'] / 255 );
+	$g = mcp_abilities_gutenberg_linearize_channel( $rgb['g'] / 255 );
+	$b = mcp_abilities_gutenberg_linearize_channel( $rgb['b'] / 255 );
+
+	return 0.2126 * $r + 0.7152 * $g + 0.0722 * $b;
+}
+
+/**
+ * Compute WCAG contrast ratio between two colors.
+ *
+ * @param array{r:int,g:int,b:int} $foreground Foreground RGB.
+ * @param array{r:int,g:int,b:int} $background Background RGB.
+ * @return float
+ */
+function mcp_abilities_gutenberg_contrast_ratio( array $foreground, array $background ): float {
+	$l1 = mcp_abilities_gutenberg_relative_luminance( $foreground );
+	$l2 = mcp_abilities_gutenberg_relative_luminance( $background );
+
+	$light = max( $l1, $l2 );
+	$dark  = min( $l1, $l2 );
+
+	return ( $light + 0.05 ) / ( $dark + 0.05 );
+}
+
+/**
+ * Extract CSS property values from a declaration string.
+ *
+ * @param string $declarations Raw declaration block.
+ * @param array<int,string> $properties Properties to inspect.
+ * @return array<string,string>
+ */
+function mcp_abilities_gutenberg_extract_css_property_values( string $declarations, array $properties ): array {
+	$values = array();
+
+	foreach ( $properties as $property ) {
+		$property = strtolower( trim( $property ) );
+		if ( '' === $property ) {
+			continue;
+		}
+
+		if ( preg_match( '/(?:^|;)\s*' . preg_quote( $property, '/' ) . '\s*:\s*([^;]+)\s*(?:;|$)/i', $declarations, $matches ) ) {
+			$values[ $property ] = trim( preg_replace( '/\s*!important\s*$/i', '', (string) $matches[1] ) );
+		}
+	}
+
+	return $values;
+}
+
+/**
+ * Return whether a design issue should fail a page-level demo/design acceptance check.
+ *
+ * @param string $type Issue type.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_is_blocking_design_issue( string $type ): bool {
+	return in_array(
+		$type,
+		array(
+			'section_width_inconsistency_risk',
+			'internal_measure_mismatch',
+			'row_treatment_inconsistency',
+			'repeated_object_treatment_inconsistency',
+			'noninteractive_control_affordance_risk',
+			'button_contrast_risk',
+			'hero_heading_readability_risk',
+		),
+		true
+	);
+}
+
+/**
+ * Extract layout-risk issues from CSS text.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_layout_risks( string $css, string $source ): array {
+	$issues = array();
+	$checks = array(
+		array(
+			'type'     => 'layout_overlap_risk',
+			'severity' => 'warning',
+			'pattern'  => '/(?:margin-top\s*:\s*-\s*[^;{}]+|margin\s*:\s*-\s*[^;{}]+)/i',
+			'message'  => 'CSS uses a negative margin declaration; this can pull one section into another and create visible overlap.',
+		),
+		array(
+			'type'     => 'scroll_region_risk',
+			'severity' => 'warning',
+			'pattern'  => '/overflow(?:-x|-y)?\s*:\s*(?:auto|scroll)\b/i',
+			'message'  => 'CSS creates an explicit scroll region; this can introduce unintended internal scrollbars or scroll leakage.',
+		),
+		array(
+			'type'     => 'viewport_overflow_risk',
+			'severity' => 'warning',
+			'pattern'  => '/(?:width|min-width|max-width)\s*:\s*(?:100vw|calc\([^;{}]*50vw[^;{}]*\)|1\d{2,}vw)\b/i',
+			'message'  => 'CSS uses viewport-width sizing that often causes horizontal overflow when combined with page padding or transforms.',
+		),
+		// Large translate offsets are not automatically broken, but they are a common source of visual collisions.
+		array(
+			'type'     => 'transform_offset_risk',
+			'severity' => 'warning',
+			'pattern'  => '/transform\s*:\s*[^;{}]*translate(?:X|Y)?\(\s*-[^)]+|\btransform\s*:\s*[^;{}]*translate(?:X|Y)?\(\s*[1-9][0-9.]*rem/i',
+			'message'  => 'CSS uses a translate offset; large offsets can detach content from its flow box and create overlaps or clipping.',
+		),
+		array(
+			'type'     => 'position_overlay_risk',
+			'severity' => 'warning',
+			'pattern'  => '/position\s*:\s*(?:absolute|fixed)\b(?:(?![{}]).)*(?:top|right|bottom|left|inset)\s*:/i',
+			'message'  => 'CSS uses absolute or fixed positioning with explicit offsets; this commonly creates overlays that break editor and frontend layout flow.',
+		),
+	);
+
+	foreach ( $checks as $check ) {
+		if ( preg_match_all( $check['pattern'], $css, $matches ) ) {
+			$snippets = array_values(
+				array_unique(
+					array_map(
+						'mcp_abilities_gutenberg_compact_css_snippet',
+						array_slice( $matches[0], 0, 3 )
+					)
+				)
+			);
+
+			$issues[] = array(
+				'type'      => $check['type'],
+				'severity'  => $check['severity'],
+				'source'    => $source,
+				'count'     => count( $matches[0] ),
+				'snippets'  => $snippets,
+				'message'   => $check['message'],
+			);
+		}
+	}
+
+	return $issues;
+}
+
+/**
+ * Collect layout-risk issues from inline style attributes inside a DOM scope.
+ *
+ * @param DOMXPath   $xpath XPath helper.
+ * @param DOMElement $scope Scope element.
+ * @return array{issues: array<int,array<string,mixed>>, count: int}
+ */
+function mcp_abilities_gutenberg_collect_inline_style_layout_risks( DOMXPath $xpath, DOMElement $scope ): array {
+	$issues          = array();
+	$inline_style_count = 0;
+	$style_nodes     = $xpath->query( './/*[@style]', $scope );
+
+	if ( ! $style_nodes instanceof DOMNodeList || 0 === $style_nodes->length ) {
+		return array(
+			'issues' => array(),
+			'count'  => 0,
+		);
+	}
+
+	for ( $index = 0; $index < $style_nodes->length; $index++ ) {
+		$style_node = $style_nodes->item( $index );
+		if ( ! $style_node instanceof DOMElement ) {
+			continue;
+		}
+
+		$style = trim( (string) $style_node->getAttribute( 'style' ) );
+		if ( '' === $style ) {
+			continue;
+		}
+
+		++$inline_style_count;
+		$selector = mcp_abilities_gutenberg_describe_dom_element( $style_node );
+		$node_issues = mcp_abilities_gutenberg_collect_css_layout_risks(
+			$style,
+			sprintf( 'inline-style:%s', $selector )
+		);
+
+		foreach ( $node_issues as $node_issue ) {
+			$node_issue['selector'] = $selector;
+			$issues[] = $node_issue;
+		}
+	}
+
+	return array(
+		'issues' => $issues,
+		'count'  => $inline_style_count,
+	);
+}
+
+/**
+ * Determine whether a CSS selector likely targets a visible Gutenberg content frame.
+ *
+ * @param string $selector CSS selector text.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_selector_targets_content_measure( string $selector ): bool {
+	$selector = strtolower( trim( $selector ) );
+	if ( '' === $selector ) {
+		return false;
+	}
+
+	$signals = array(
+		'.wp-block-group',
+		'.alignfull',
+		'.wp-block-columns',
+		'.wp-block-column',
+		'.wp-block-quote',
+		'.wp-block-cover__inner-container',
+		'.page-content',
+		'.entry-content',
+		'nth-child(',
+		'>*',
+		'> *',
+	);
+
+	foreach ( $signals as $signal ) {
+		if ( false !== strpos( $selector, $signal ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Extract fixed content-measure declarations from CSS.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_content_measures( string $css, string $source ): array {
+	$measures = array();
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return $measures;
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector     = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations = (string) ( $rule[2] ?? '' );
+		if ( '' === $selector || '' === trim( $declarations ) ) {
+			continue;
+		}
+
+		if ( ! mcp_abilities_gutenberg_selector_targets_content_measure( $selector ) ) {
+			continue;
+		}
+
+		if ( ! preg_match_all( '/\b(max-width|width)\s*:\s*([0-9]+(?:\.[0-9]+)?)(px|rem)\b/i', $declarations, $matches, PREG_SET_ORDER ) ) {
+			continue;
+		}
+
+		foreach ( $matches as $match ) {
+			$property = strtolower( (string) ( $match[1] ?? '' ) );
+			$value    = (float) ( $match[2] ?? 0 );
+			$unit     = strtolower( (string) ( $match[3] ?? '' ) );
+			if ( $value <= 0 || '' === $unit ) {
+				continue;
+			}
+
+			$value_px = 'rem' === $unit ? $value * 16 : $value;
+			if ( $value_px < 320 || $value_px > 1800 ) {
+				continue;
+			}
+
+			$measures[] = array(
+				'source'        => $source,
+				'selector'      => mcp_abilities_gutenberg_compact_css_snippet( $selector ),
+				'property'      => $property,
+				'value'         => rtrim( rtrim( sprintf( '%.2f', $value ), '0' ), '.' ) . $unit,
+				'normalized_px' => (int) round( $value_px ),
+			);
+		}
+	}
+
+	return $measures;
+}
+
+/**
+ * Check whether a CSS selector targets a text-level measure inside a larger section.
+ *
+ * @param string $selector CSS selector.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_selector_targets_text_measure( string $selector ): bool {
+	$selector = strtolower( trim( $selector ) );
+	if ( '' === $selector ) {
+		return false;
+	}
+
+	$signals = array(
+		'.wp-block-quote p',
+		'.wp-block-quote blockquote',
+		'.wp-block-quote cite',
+		'.wp-block-paragraph',
+		' blockquote',
+		' blockquote p',
+		' p',
+		' cite',
+		' h1',
+		' h2',
+		' h3',
+		' h4',
+		' h5',
+		' h6',
+	);
+
+	foreach ( $signals as $signal ) {
+		if ( false !== strpos( $selector, $signal ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Check whether a CSS selector targets a nested structural container inside a larger section.
+ *
+ * @param string $selector CSS selector.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_selector_targets_nested_container_measure( string $selector ): bool {
+	$selector = strtolower( trim( $selector ) );
+	if ( '' === $selector ) {
+		return false;
+	}
+
+	$signals = array(
+		'.wp-block-columns',
+		'.wp-block-column',
+		'.wp-block-group',
+		'.wp-block-cover__inner-container',
+	);
+
+	foreach ( $signals as $signal ) {
+		if ( false !== strpos( $selector, $signal ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Extract nested text-measure declarations from CSS.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_text_measures( string $css, string $source ): array {
+	$measures = array();
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return $measures;
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector     = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations = (string) ( $rule[2] ?? '' );
+		if ( '' === $selector || '' === trim( $declarations ) ) {
+			continue;
+		}
+
+		if ( ! mcp_abilities_gutenberg_selector_targets_text_measure( $selector ) ) {
+			continue;
+		}
+
+		if ( ! preg_match_all( '/\b(max-width|width)\s*:\s*([0-9]+(?:\.[0-9]+)?)(px|rem|ch)\b/i', $declarations, $matches, PREG_SET_ORDER ) ) {
+			continue;
+		}
+
+		foreach ( $matches as $match ) {
+			$property = strtolower( (string) ( $match[1] ?? '' ) );
+			$value    = (float) ( $match[2] ?? 0 );
+			$unit     = strtolower( (string) ( $match[3] ?? '' ) );
+			if ( $value <= 0 || '' === $unit ) {
+				continue;
+			}
+
+			if ( 'rem' === $unit ) {
+				$value_px = $value * 16;
+			} elseif ( 'ch' === $unit ) {
+				$value_px = $value * 8;
+			} else {
+				$value_px = $value;
+			}
+
+			if ( $value_px < 220 || $value_px > 1200 ) {
+				continue;
+			}
+
+			$measures[] = array(
+				'source'        => $source,
+				'selector'      => mcp_abilities_gutenberg_compact_css_snippet( $selector ),
+				'property'      => $property,
+				'value'         => rtrim( rtrim( sprintf( '%.2f', $value ), '0' ), '.' ) . $unit,
+				'kind'          => 'text',
+				'normalized_px' => (int) round( $value_px ),
+			);
+		}
+	}
+
+	return $measures;
+}
+
+/**
+ * Extract nested structural-measure declarations from CSS.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_nested_container_measures( string $css, string $source ): array {
+	$measures = array();
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return $measures;
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector     = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations = (string) ( $rule[2] ?? '' );
+		if ( '' === $selector || '' === trim( $declarations ) ) {
+			continue;
+		}
+
+		if ( ! mcp_abilities_gutenberg_selector_targets_nested_container_measure( $selector ) ) {
+			continue;
+		}
+
+		if ( mcp_abilities_gutenberg_selector_targets_text_measure( $selector ) ) {
+			continue;
+		}
+
+		if ( ! preg_match_all( '/\b(max-width|width)\s*:\s*([0-9]+(?:\.[0-9]+)?)(px|rem)\b/i', $declarations, $matches, PREG_SET_ORDER ) ) {
+			continue;
+		}
+
+		foreach ( $matches as $match ) {
+			$property = strtolower( (string) ( $match[1] ?? '' ) );
+			$value    = (float) ( $match[2] ?? 0 );
+			$unit     = strtolower( (string) ( $match[3] ?? '' ) );
+			if ( $value <= 0 || '' === $unit ) {
+				continue;
+			}
+
+			$value_px = 'rem' === $unit ? $value * 16 : $value;
+			if ( $value_px < 320 || $value_px > 1800 ) {
+				continue;
+			}
+
+			$measures[] = array(
+				'source'        => $source,
+				'selector'      => mcp_abilities_gutenberg_compact_css_snippet( $selector ),
+				'property'      => $property,
+				'value'         => rtrim( rtrim( sprintf( '%.2f', $value ), '0' ), '.' ) . $unit,
+				'kind'          => 'container',
+				'normalized_px' => (int) round( $value_px ),
+			);
+		}
+	}
+
+	return $measures;
+}
+
+/**
+ * Turn extracted content measures into a width-system issue when they drift.
+ *
+ * @param array<int,array<string,mixed>> $measures Extracted measure declarations.
+ * @param string                         $source   Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_width_system_risks( array $measures, string $source ): array {
+	if ( count( $measures ) < 2 ) {
+		return array();
+	}
+
+	$buckets = array();
+	foreach ( $measures as $measure ) {
+		$normalized_px = isset( $measure['normalized_px'] ) ? (int) $measure['normalized_px'] : 0;
+		if ( $normalized_px <= 0 ) {
+			continue;
+		}
+
+		$bucket_key = (string) ( (int) round( $normalized_px / 8 ) * 8 );
+		if ( ! isset( $buckets[ $bucket_key ] ) ) {
+			$buckets[ $bucket_key ] = array(
+				'normalized_px' => (int) round( $normalized_px / 8 ) * 8,
+				'values'        => array(),
+				'selectors'     => array(),
+			);
+		}
+
+		$buckets[ $bucket_key ]['values'][]    = (string) ( $measure['value'] ?? '' );
+		$buckets[ $bucket_key ]['selectors'][] = (string) ( $measure['selector'] ?? '' );
+	}
+
+	if ( count( $buckets ) < 2 ) {
+		return array();
+	}
+
+	$values    = array();
+	$selectors = array();
+	foreach ( $buckets as $bucket ) {
+		$values[] = sprintf(
+			'%dpx (%s)',
+			(int) $bucket['normalized_px'],
+			implode( ', ', array_slice( array_values( array_unique( array_filter( $bucket['values'] ) ) ), 0, 2 ) )
+		);
+		$selectors = array_merge( $selectors, array_slice( array_values( array_unique( array_filter( $bucket['selectors'] ) ) ), 0, 2 ) );
+	}
+
+	return array(
+		array(
+			'type'      => 'section_width_inconsistency_risk',
+			'severity'  => 'warning',
+			'source'    => $source,
+			'values'    => array_values( array_unique( $values ) ),
+			'selectors' => array_values( array_unique( array_slice( $selectors, 0, 6 ) ) ),
+			'message'   => 'Embedded Gutenberg styling defines multiple fixed content measures across major section wrappers. Pages usually feel more coherent when intro panels, cards, quotes, reusable rows, and CTA sections share one primary content width and only intentional full-bleed sections break it.',
+		),
+	);
+}
+
+/**
+ * Turn nested text measures into a coherence issue when they drift too far from the primary section width.
+ *
+ * @param array<int,array<string,mixed>> $content_measures Extracted section-level measures.
+ * @param array<int,array<string,mixed>> $text_measures Extracted text-level measures.
+ * @param string                         $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_internal_measure_mismatch_risks( array $content_measures, array $inner_measures, string $source ): array {
+	if ( empty( $content_measures ) || empty( $inner_measures ) ) {
+		return array();
+	}
+
+	$outer_values = array();
+	foreach ( $content_measures as $measure ) {
+		$normalized_px = isset( $measure['normalized_px'] ) ? (int) $measure['normalized_px'] : 0;
+		if ( $normalized_px >= 880 ) {
+			$outer_values[] = $normalized_px;
+		}
+	}
+
+	if ( empty( $outer_values ) ) {
+		return array();
+	}
+
+	rsort( $outer_values );
+	$primary_outer = (int) $outer_values[0];
+	$mismatched    = array();
+
+	foreach ( $inner_measures as $measure ) {
+		$normalized_px = isset( $measure['normalized_px'] ) ? (int) $measure['normalized_px'] : 0;
+		$kind          = (string) ( $measure['kind'] ?? 'text' );
+		if ( $normalized_px <= 0 ) {
+			continue;
+		}
+
+		if ( $normalized_px > ( $primary_outer - 180 ) ) {
+			continue;
+		}
+
+		if ( 'container' === $kind ) {
+			if ( $normalized_px > (int) floor( $primary_outer * 0.82 ) ) {
+				continue;
+			}
+		} else {
+			if ( $normalized_px > (int) floor( $primary_outer * 0.72 ) ) {
+				continue;
+			}
+		}
+
+		$mismatched[] = $measure;
+	}
+
+	if ( empty( $mismatched ) ) {
+		return array();
+	}
+
+	$selectors = array_values(
+		array_unique(
+			array_slice(
+				array_filter( array_map( 'strval', wp_list_pluck( $mismatched, 'selector' ) ) ),
+				0,
+				6
+			)
+		)
+	);
+	$values = array_values(
+		array_unique(
+			array_slice(
+				array_filter( array_map( 'strval', wp_list_pluck( $mismatched, 'value' ) ) ),
+				0,
+				6
+			)
+		)
+	);
+	$kinds = array_values(
+		array_unique(
+			array_filter(
+				array_map(
+					'strval',
+					wp_list_pluck( $mismatched, 'kind' )
+				)
+			)
+		)
+	);
+
+	return array(
+		array(
+			'type'             => 'internal_measure_mismatch',
+			'severity'         => 'notice',
+			'source'           => $source,
+			'section_width_px' => $primary_outer,
+			'measure_kinds'    => $kinds,
+			'values'           => $values,
+			'selectors'        => $selectors,
+			'message'          => 'A major section uses the shared page width, but a nested row or text lane inside it is capped much narrower. That often leaves a fake empty lane and makes the section feel unfinished even when the outer wrapper is aligned correctly.',
+		),
+	);
+}
+
+/**
+ * Collect sibling-treatment inconsistencies from CSS selectors such as nth-child card styling.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_sibling_treatment_issues( string $css, string $source ): array {
+	$groups = array();
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return array();
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = (string) ( $rule[2] ?? '' );
+		if ( '' === $selector_block || '' === trim( $declarations ) ) {
+			continue;
+		}
+
+		if ( ! preg_match( '/(?:transform\s*:|rotate\(|background\s*:|box-shadow\s*:|border-radius\s*:|border\s*:)/i', $declarations ) ) {
+			continue;
+		}
+
+		$selectors = array_map( 'trim', explode( ',', $selector_block ) );
+		foreach ( $selectors as $selector ) {
+			if ( '' === $selector || ! preg_match( '/nth-child\(\s*(\d+)\s*\)/i', $selector, $matches ) ) {
+				continue;
+			}
+
+			$index = (int) $matches[1];
+			if ( $index <= 0 || $index > 6 ) {
+				continue;
+			}
+
+			$group_key = strtolower( preg_replace( '/nth-child\(\s*\d+\s*\)/i', 'nth-child(*)', $selector ) );
+			if ( '' === trim( $group_key ) ) {
+				continue;
+			}
+
+			if ( ! isset( $groups[ $group_key ] ) ) {
+				$groups[ $group_key ] = array(
+					'indices'     => array(),
+					'selectors'   => array(),
+					'declarations'=> array(),
+				);
+			}
+
+			$groups[ $group_key ]['indices'][]      = $index;
+			$groups[ $group_key ]['selectors'][]    = mcp_abilities_gutenberg_compact_css_snippet( $selector );
+			$groups[ $group_key ]['declarations'][] = mcp_abilities_gutenberg_compact_css_snippet( trim( $declarations ) );
+		}
+	}
+
+	$issues = array();
+	foreach ( $groups as $group_key => $group ) {
+		$indices = array_values( array_unique( array_map( 'intval', $group['indices'] ) ) );
+		sort( $indices );
+
+		if ( count( $indices ) < 2 ) {
+			continue;
+		}
+
+		$max_index = max( $indices );
+		if ( $max_index < 3 ) {
+			continue;
+		}
+
+		$expected = range( 1, $max_index );
+		$missing  = array_values( array_diff( $expected, $indices ) );
+		if ( empty( $missing ) ) {
+			continue;
+		}
+
+		$issues[] = array(
+			'type'        => 'sibling_treatment_inconsistency',
+			'severity'    => 'notice',
+			'source'      => $source,
+			'selector'    => mcp_abilities_gutenberg_compact_css_snippet( $group_key ),
+			'styled_items'=> $indices,
+			'missing_items'=> $missing,
+			'examples'    => array_values( array_unique( array_slice( $group['selectors'], 0, 3 ) ) ),
+			'message'     => 'Sibling items in a repeated row use accent styling on only part of the set. If the row is meant to feel like one component family, make the treatment intentional across all siblings or clearly spotlight one item as the exception.',
+		);
+	}
+
+	return $issues;
+}
+
+/**
+ * Extract embedded CSS blocks directly from Gutenberg content.
+ *
+ * @param string $content Raw Gutenberg content.
+ * @return array<int,array<string,string>>
+ */
+function mcp_abilities_gutenberg_extract_embedded_css_entries( string $content ): array {
+	$entries = array();
+
+	if ( ! preg_match_all( '#<style[^>]*>(.*?)</style>#is', $content, $matches, PREG_SET_ORDER ) ) {
+		return $entries;
+	}
+
+	foreach ( $matches as $index => $match ) {
+		$css = trim( (string) ( $match[1] ?? '' ) );
+		if ( '' === $css ) {
+			continue;
+		}
+
+		$entries[] = array(
+			'source' => sprintf( 'embedded-style-block-%d', $index + 1 ),
+			'css'    => $css,
+		);
+	}
+
+	return $entries;
+}
+
+/**
+ * Classify whether a selector-specific declaration tries to keep an object open or boxed.
+ *
+ * @param string $declarations CSS declarations.
+ * @return string
+ */
+function mcp_abilities_gutenberg_classify_css_treatment( string $declarations ): string {
+	$declarations_lc = strtolower( $declarations );
+
+	$has_boxed_signal = false !== strpos( $declarations_lc, 'border-radius' )
+		|| false !== strpos( $declarations_lc, 'box-shadow' )
+		|| preg_match( '/background\s*:\s*(?!transparent\b)(?!none\b)/i', $declarations_lc )
+		|| preg_match( '/background-color\s*:\s*(?!transparent\b)(?!none\b)/i', $declarations_lc )
+		|| preg_match( '/border\s*:\s*(?!0\b)(?!none\b)/i', $declarations_lc )
+		|| preg_match( '/border-(?:top|right|bottom|left)\s*:\s*(?!0\b)(?!none\b)/i', $declarations_lc );
+
+	$has_open_signal = false !== strpos( $declarations_lc, 'background:transparent' )
+		|| false !== strpos( $declarations_lc, 'background-color:transparent' )
+		|| false !== strpos( $declarations_lc, 'border:0' )
+		|| false !== strpos( $declarations_lc, 'border:none' )
+		|| false !== strpos( $declarations_lc, 'box-shadow:none' );
+
+	if ( $has_boxed_signal ) {
+		return 'boxed';
+	}
+	if ( $has_open_signal ) {
+		return 'open';
+	}
+
+	return 'neutral';
+}
+
+/**
+ * Detect conflicting treatment applied to repeated sibling families through positional CSS.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_repeated_object_treatment_issues( string $css, string $source ): array {
+	$families = array();
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return array();
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = trim( (string) ( $rule[2] ?? '' ) );
+		if ( '' === $selector_block || '' === $declarations ) {
+			continue;
+		}
+
+		$selectors = array_map( 'trim', explode( ',', $selector_block ) );
+		foreach ( $selectors as $selector ) {
+			if ( '' === $selector ) {
+				continue;
+			}
+
+			if ( ! preg_match( '/(:first-child|:last-child|nth-child\(\s*\d+\s*\))/i', $selector, $position_match ) ) {
+				continue;
+			}
+
+			$treatment = mcp_abilities_gutenberg_classify_css_treatment( $declarations );
+			if ( 'neutral' === $treatment ) {
+				continue;
+			}
+
+			$family_key = strtolower(
+				preg_replace(
+					'/(?:\:first-child|\:last-child|nth-child\(\s*\d+\s*\))/i',
+					':position(*)',
+					$selector
+				)
+			);
+			if ( '' === trim( $family_key ) ) {
+				continue;
+			}
+
+			if ( ! isset( $families[ $family_key ] ) ) {
+				$families[ $family_key ] = array(
+					'boxed'    => array(),
+					'open'     => array(),
+					'examples' => array(),
+				);
+			}
+
+			$families[ $family_key ][ $treatment ][] = mcp_abilities_gutenberg_compact_css_snippet( $selector );
+			$families[ $family_key ]['examples'][]   = mcp_abilities_gutenberg_compact_css_snippet( $selector );
+		}
+	}
+
+	$issues = array();
+	foreach ( $families as $family_key => $family ) {
+		if ( empty( $family['boxed'] ) || empty( $family['open'] ) ) {
+			continue;
+		}
+
+		$issues[] = array(
+			'type'        => 'repeated_object_treatment_inconsistency',
+			'severity'    => 'notice',
+			'source'      => $source,
+			'selector'    => mcp_abilities_gutenberg_compact_css_snippet( $family_key ),
+			'boxed_items' => array_values( array_unique( array_slice( $family['boxed'], 0, 4 ) ) ),
+			'open_items'  => array_values( array_unique( array_slice( $family['open'], 0, 4 ) ) ),
+			'examples'    => array_values( array_unique( array_slice( $family['examples'], 0, 6 ) ) ),
+			'message'     => 'Matching sibling objects receive conflicting containment treatments through positional CSS. Repeated modules should not quietly switch between open and boxed states without a strong editorial reason.',
+		);
+	}
+
+	return $issues;
+}
+
+/**
+ * Detect weak button contrast in embedded Gutenberg CSS.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_button_contrast_issues( string $css, string $source ): array {
+	$issues = array();
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return $issues;
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = (string) ( $rule[2] ?? '' );
+		if ( '' === $selector_block || '' === trim( $declarations ) ) {
+			continue;
+		}
+
+		if ( false === strpos( strtolower( $selector_block ), 'wp-block-button__link' ) ) {
+			continue;
+		}
+
+		$properties = mcp_abilities_gutenberg_extract_css_property_values(
+			$declarations,
+			array( 'color', 'background-color', 'background' )
+		);
+		$foreground = mcp_abilities_gutenberg_parse_css_color( $properties['color'] ?? '' );
+		$background = mcp_abilities_gutenberg_parse_css_color( $properties['background-color'] ?? ( $properties['background'] ?? '' ) );
+
+		if ( ! is_array( $foreground ) || ! is_array( $background ) ) {
+			continue;
+		}
+
+		$contrast = mcp_abilities_gutenberg_contrast_ratio( $foreground, $background );
+		if ( $contrast >= 3.5 ) {
+			continue;
+		}
+
+		$issues[] = array(
+			'type'           => 'button_contrast_risk',
+			'severity'       => 'warning',
+			'source'         => $source,
+			'selector'       => mcp_abilities_gutenberg_compact_css_snippet( $selector_block ),
+			'contrast_ratio' => round( $contrast, 2 ),
+			'message'        => 'Button text and background colors are too close in contrast. This often makes CTAs look disabled or nearly invisible.',
+		);
+	}
+
+	return $issues;
+}
+
+/**
+ * Check whether a rendered element is interactive.
+ *
+ * @param DOMElement $element Element to inspect.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_dom_element_is_interactive( DOMElement $element ): bool {
+	$tag = strtolower( $element->tagName );
+	if ( in_array( $tag, array( 'a', 'button', 'input', 'select', 'textarea', 'summary' ), true ) ) {
+		return true;
+	}
+
+	if ( '' !== trim( (string) $element->getAttribute( 'href' ) ) ) {
+		return true;
+	}
+
+	$role = strtolower( trim( (string) $element->getAttribute( 'role' ) ) );
+	if ( in_array( $role, array( 'button', 'link', 'tab', 'menuitem' ), true ) ) {
+		return true;
+	}
+
+	$tabindex = trim( (string) $element->getAttribute( 'tabindex' ) );
+	if ( '' !== $tabindex && '-1' !== $tabindex ) {
+		return true;
+	}
+
+	if ( '' !== trim( (string) $element->getAttribute( 'onclick' ) ) ) {
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * Check whether a CSS selector explicitly targets interactive controls.
+ *
+ * @param string $selector Selector text.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_selector_targets_interactive_controls( string $selector ): bool {
+	$selector_lc = strtolower( trim( $selector ) );
+	if ( '' === $selector_lc ) {
+		return false;
+	}
+
+	return (bool) preg_match( '/(^|[\s>+~,])(?:a|button|input|select|textarea|summary)\b|\[role\s*=\s*["\']?(?:button|link|tab|menuitem)["\']?\]|wp-block-button|wp-element-button/', $selector_lc );
+}
+
+/**
+ * Check whether a selector suggests badge/chip/tag treatment.
+ *
+ * @param string $selector Selector text.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_selector_suggests_token_ui( string $selector ): bool {
+	$selector_lc = strtolower( trim( $selector ) );
+	if ( '' === $selector_lc ) {
+		return false;
+	}
+
+	return (bool) preg_match( '/(?:pill|chip|badge|tag|token|label)/', $selector_lc );
+}
+
+/**
+ * Check whether CSS declarations look like control-like inline token styling.
+ *
+ * @param string $declarations CSS declarations.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_css_looks_like_noninteractive_control_affordance( string $declarations ): bool {
+	$declarations_lc = strtolower( $declarations );
+
+	$has_radius = (bool) preg_match( '/border-radius\s*:\s*(?:999px|9999px|[1-9]\dpx|(?:1(?:\.[0-9]+)?|[2-9](?:\.[0-9]+)?)rem)/i', $declarations_lc );
+	$has_padding = (bool) preg_match( '/padding(?:-[a-z]+)?\s*:\s*[^;]*(?:0\.[4-9]\d*|[1-9]\d*(?:\.\d+)?)\s*(?:rem|px)/i', $declarations_lc );
+	$has_fill_or_border = (bool) preg_match( '/background(?:-color)?\s*:\s*(?!transparent\b)(?!none\b)|border(?:-[a-z]+)?\s*:\s*(?!0\b)(?!none\b)/i', $declarations_lc );
+	$is_inlineish = false !== strpos( $declarations_lc, 'display:inline-flex' )
+		|| false !== strpos( $declarations_lc, 'display:inline-block' )
+		|| false !== strpos( $declarations_lc, 'display:inline-grid' );
+
+	return $has_radius && $has_padding && $has_fill_or_border && $is_inlineish;
+}
+
+/**
+ * Detect non-interactive tokens that are styled with button-like affordances.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $html Rendered HTML to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_noninteractive_control_affordance_issues( string $css, string $html, string $source ): array {
+	if ( '' === trim( $css ) || '' === trim( $html ) ) {
+		return array();
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-design-root">' . $html . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array();
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-design-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( ! $root instanceof DOMElement ) {
+		return array();
+	}
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return array();
+	}
+
+	$issues = array();
+	$seen   = array();
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = trim( (string) ( $rule[2] ?? '' ) );
+		if ( '' === $selector_block || '' === $declarations ) {
+			continue;
+		}
+
+		if ( ! mcp_abilities_gutenberg_css_looks_like_noninteractive_control_affordance( $declarations ) ) {
+			continue;
+		}
+
+		$selectors = array_map( 'trim', explode( ',', $selector_block ) );
+		foreach ( $selectors as $selector ) {
+			if ( '' === $selector || mcp_abilities_gutenberg_selector_targets_interactive_controls( $selector ) ) {
+				continue;
+			}
+
+			$class_matches = array();
+			preg_match_all( '/\.([a-zA-Z0-9_-]+)/', $selector, $class_matches );
+			$class_names = array_values( array_unique( array_map( 'strval', $class_matches[1] ?? array() ) ) );
+			if ( empty( $class_names ) ) {
+				continue;
+			}
+
+			$noninteractive_nodes = array();
+			foreach ( $class_names as $class_name ) {
+				$nodes = $xpath->query(
+					sprintf( './/*[contains(concat(" ", normalize-space(@class), " "), " %s ")]', $class_name ),
+					$root
+				);
+				if ( ! $nodes instanceof DOMNodeList || 0 === $nodes->length ) {
+					continue;
+				}
+
+				foreach ( $nodes as $node ) {
+					if ( ! $node instanceof DOMElement ) {
+						continue;
+					}
+
+					if ( mcp_abilities_gutenberg_dom_element_is_interactive( $node ) ) {
+						continue;
+					}
+
+					$interactive_descendants = $xpath->query( './/a|.//button|.//input|.//select|.//textarea|.//*[@role="button"]|.//*[@role="link"]', $node );
+					if ( $interactive_descendants instanceof DOMNodeList && $interactive_descendants->length > 0 ) {
+						continue;
+					}
+
+					$noninteractive_nodes[] = $node;
+				}
+			}
+
+			if ( empty( $noninteractive_nodes ) ) {
+				continue;
+			}
+
+			$key = md5( $selector . '|' . $declarations );
+			if ( isset( $seen[ $key ] ) ) {
+				continue;
+			}
+			$seen[ $key ] = true;
+
+			$examples = array();
+			foreach ( array_slice( $noninteractive_nodes, 0, 4 ) as $node ) {
+				$examples[] = mcp_abilities_gutenberg_describe_dom_element( $node );
+			}
+
+			$issues[] = array(
+				'type'          => 'noninteractive_control_affordance_risk',
+				'severity'      => 'notice',
+				'source'        => $source,
+				'selector'      => mcp_abilities_gutenberg_compact_css_snippet( $selector ),
+				'examples'      => array_values( array_unique( $examples ) ),
+				'count'         => count( $noninteractive_nodes ),
+				'token_ui_hint' => mcp_abilities_gutenberg_selector_suggests_token_ui( $selector ),
+				'message'       => 'Non-interactive labels are styled with chip/button-like affordances. If they are not real controls or links, they should read as metadata or proof, not as tappable actions.',
+			);
+		}
+	}
+
+	return $issues;
+}
+
+/**
+ * Detect trailing bottom-gap styling on content wrappers.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_trailing_gap_issues( string $css, string $source ): array {
+	$issues = array();
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return $issues;
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = (string) ( $rule[2] ?? '' );
+		if ( '' === $selector_block || '' === trim( $declarations ) ) {
+			continue;
+		}
+
+		$selector_lc = strtolower( $selector_block );
+		if ( false === strpos( $selector_lc, '.page-content' ) && false === strpos( $selector_lc, '.entry-content' ) ) {
+			continue;
+		}
+
+		$properties = mcp_abilities_gutenberg_extract_css_property_values(
+			$declarations,
+			array( 'padding-bottom' )
+		);
+		$value = (string) ( $properties['padding-bottom'] ?? '' );
+		if ( '' === $value || ! preg_match( '/^([0-9]+(?:\.[0-9]+)?)(px|rem)$/i', $value, $matches ) ) {
+			continue;
+		}
+
+		$amount = (float) $matches[1];
+		$unit   = strtolower( (string) $matches[2] );
+		$px     = 'rem' === $unit ? $amount * 16 : $amount;
+		if ( $px < 24 ) {
+			continue;
+		}
+
+		$issues[] = array(
+			'type'        => 'trailing_content_gap_risk',
+			'severity'    => 'notice',
+			'source'      => $source,
+			'selector'    => mcp_abilities_gutenberg_compact_css_snippet( $selector_block ),
+			'value'       => rtrim( rtrim( sprintf( '%.2f', $amount ), '0' ), '.' ) . $unit,
+			'normalized_px' => (int) round( $px ),
+			'message'     => 'The main content wrapper adds notable bottom padding. This can leave a visible gap below the last section when the footer is hidden or minimal.',
+		);
+	}
+
+	return $issues;
+}
+
+/**
+ * Detect design-token sprawl in embedded Gutenberg CSS.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_design_token_sprawl_issues( string $css, string $source ): array {
+	$radii   = array();
+	$shadows = array();
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return array();
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = (string) ( $rule[2] ?? '' );
+		if ( '' === $selector_block || '' === trim( $declarations ) ) {
+			continue;
+		}
+
+		$selector_lc = strtolower( $selector_block );
+		if ( false === strpos( $selector_lc, 'wp-block-' ) && false === strpos( $selector_lc, '.page-content' ) && false === strpos( $selector_lc, '.entry-content' ) ) {
+			continue;
+		}
+
+		$properties = mcp_abilities_gutenberg_extract_css_property_values(
+			$declarations,
+			array( 'border-radius', 'box-shadow' )
+		);
+
+		if ( ! empty( $properties['border-radius'] ) ) {
+			$radii[] = mcp_abilities_gutenberg_compact_css_snippet( (string) $properties['border-radius'] );
+		}
+		if ( ! empty( $properties['box-shadow'] ) ) {
+			$shadows[] = mcp_abilities_gutenberg_compact_css_snippet( (string) $properties['box-shadow'] );
+		}
+	}
+
+	$radii   = array_values( array_unique( array_filter( $radii ) ) );
+	$shadows = array_values( array_unique( array_filter( $shadows ) ) );
+	$issues  = array();
+
+	if ( count( $radii ) > 3 ) {
+		$issues[] = array(
+			'type'    => 'design_token_sprawl',
+			'severity'=> 'notice',
+			'source'  => $source,
+			'aspect'  => 'border-radius',
+			'values'  => array_slice( $radii, 0, 6 ),
+			'message' => 'The page uses many different border-radius values. Repeated components usually feel more coherent when corners come from a smaller token set.',
+		);
+	}
+
+	if ( count( $shadows ) > 3 ) {
+		$issues[] = array(
+			'type'    => 'design_token_sprawl',
+			'severity'=> 'notice',
+			'source'  => $source,
+			'aspect'  => 'box-shadow',
+			'values'  => array_slice( $shadows, 0, 6 ),
+			'message' => 'The page uses many different shadow treatments. Design systems usually feel calmer when elevation is limited to a smaller token set.',
+		);
+	}
+
+	return $issues;
+}
+
+/**
+ * Detect hero heading contrast/readability risks from embedded CSS.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_hero_heading_contrast_issues( string $css, string $source ): array {
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return array();
+	}
+
+	$hero_backgrounds = array();
+	$hero_headings    = array();
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = trim( (string) ( $rule[2] ?? '' ) );
+		if ( '' === $selector_block || '' === $declarations ) {
+			continue;
+		}
+
+		$selectors = array_map( 'trim', explode( ',', $selector_block ) );
+		foreach ( $selectors as $selector ) {
+			$selector_lc = strtolower( $selector );
+			if ( '' === $selector_lc || false === strpos( $selector_lc, 'div:first-child' ) ) {
+				continue;
+			}
+
+			if ( preg_match( '/(^|[\s>+~])h1\b/i', $selector_lc ) ) {
+				$canonical = mcp_abilities_gutenberg_canonicalize_hero_selector( $selector );
+				$hero_headings[] = array(
+					'selector'     => mcp_abilities_gutenberg_compact_css_snippet( $selector ),
+					'canonical'    => $canonical,
+					'complexity'   => mcp_abilities_gutenberg_measure_selector_complexity( $canonical ),
+					'declarations' => $declarations,
+				);
+				continue;
+			}
+
+			if ( false !== strpos( strtolower( $declarations ), 'background' ) ) {
+				$canonical = mcp_abilities_gutenberg_canonicalize_hero_selector( $selector );
+				$hero_backgrounds[] = array(
+					'selector'     => mcp_abilities_gutenberg_compact_css_snippet( $selector ),
+					'canonical'    => $canonical,
+					'complexity'   => mcp_abilities_gutenberg_measure_selector_complexity( $canonical ),
+					'declarations' => $declarations,
+				);
+			}
+		}
+	}
+
+	if ( empty( $hero_backgrounds ) || empty( $hero_headings ) ) {
+		return array();
+	}
+
+	$min_heading_complexity = min( array_map( 'intval', wp_list_pluck( $hero_headings, 'complexity' ) ) );
+	$min_background_complexity = min( array_map( 'intval', wp_list_pluck( $hero_backgrounds, 'complexity' ) ) );
+	$hero_headings = array_values(
+		array_filter(
+			$hero_headings,
+			static function ( array $heading ) use ( $min_heading_complexity ): bool {
+				return (int) ( $heading['complexity'] ?? 999 ) === $min_heading_complexity;
+			}
+		)
+	);
+	$hero_backgrounds = array_values(
+		array_filter(
+			$hero_backgrounds,
+			static function ( array $background ) use ( $min_background_complexity ): bool {
+				return (int) ( $background['complexity'] ?? 999 ) === $min_background_complexity;
+			}
+		)
+	);
+
+	$issues = array();
+	$seen   = array();
+	foreach ( $hero_headings as $heading_rule ) {
+		$heading_properties = mcp_abilities_gutenberg_extract_css_property_values(
+			(string) $heading_rule['declarations'],
+			array( 'color', 'text-shadow' )
+		);
+		$heading_color = mcp_abilities_gutenberg_parse_css_color( (string) ( $heading_properties['color'] ?? '' ) );
+
+		foreach ( $hero_backgrounds as $background_rule ) {
+			$background_properties = mcp_abilities_gutenberg_extract_css_property_values(
+				(string) $background_rule['declarations'],
+				array( 'background', 'background-color' )
+			);
+			$background_value = (string) ( $background_properties['background'] ?? ( $background_properties['background-color'] ?? '' ) );
+			if ( '' === $background_value ) {
+				continue;
+			}
+
+			$background_colors = mcp_abilities_gutenberg_extract_css_readability_color_stops( $background_value );
+			if ( empty( $background_colors ) ) {
+				continue;
+			}
+
+			if ( ! is_array( $heading_color ) ) {
+				$key = md5( (string) $heading_rule['selector'] . '|' . (string) $background_rule['selector'] . '|missing-color' );
+				if ( isset( $seen[ $key ] ) ) {
+					break;
+				}
+				$seen[ $key ] = true;
+				$issues[] = array(
+					'type'              => 'hero_heading_readability_risk',
+					'severity'          => 'warning',
+					'source'            => $source,
+					'selector'          => (string) $heading_rule['selector'],
+					'background_selector' => (string) $background_rule['selector'],
+					'message'           => 'A visually led hero uses a strong background treatment, but the main heading does not declare an explicit text color. Large titles can disappear into warm gradients or image-led heroes unless contrast is set intentionally.',
+				);
+				break;
+			}
+
+			$min_contrast = null;
+			foreach ( $background_colors as $background_color ) {
+				$contrast = mcp_abilities_gutenberg_contrast_ratio( $heading_color, $background_color );
+				$min_contrast = null === $min_contrast ? $contrast : min( $min_contrast, $contrast );
+			}
+
+			if ( null !== $min_contrast && $min_contrast < 3 ) {
+				$key = md5( (string) $heading_rule['selector'] . '|' . (string) $background_rule['selector'] . '|contrast' );
+				if ( isset( $seen[ $key ] ) ) {
+					break;
+				}
+				$seen[ $key ] = true;
+				$issues[] = array(
+					'type'              => 'hero_heading_readability_risk',
+					'severity'          => 'warning',
+					'source'            => $source,
+					'selector'          => (string) $heading_rule['selector'],
+					'background_selector' => (string) $background_rule['selector'],
+					'contrast_ratio'    => round( $min_contrast, 2 ),
+					'message'           => 'The main hero heading color is too close to at least one background stop. Display typography still needs strong contrast to read cleanly at a glance.',
+				);
+				break;
+			}
+		}
+	}
+
+	return $issues;
+}
+
+/**
+ * Detect weakly intentional tilt angles in embedded Gutenberg CSS.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_subtle_tilt_issues( string $css, string $source ): array {
+	$issues = array();
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return $issues;
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = trim( (string) ( $rule[2] ?? '' ) );
+		if ( '' === $selector_block || '' === $declarations ) {
+			continue;
+		}
+
+		if ( ! preg_match( '/transform\s*:\s*[^;]*rotate\(\s*(-?[0-9]+(?:\.[0-9]+)?)deg\s*\)/i', $declarations, $matches ) ) {
+			continue;
+		}
+
+		$angle = abs( (float) ( $matches[1] ?? 0 ) );
+		if ( $angle < 0.4 || $angle > 2.2 ) {
+			continue;
+		}
+
+		$issues[] = array(
+			'type'        => 'subtle_tilt_ambiguity',
+			'severity'    => 'notice',
+			'source'      => $source,
+			'selector'    => mcp_abilities_gutenberg_compact_css_snippet( $selector_block ),
+			'angle_deg'   => round( $angle, 2 ),
+			'message'     => 'A rotated element uses only a very slight tilt. At that angle it often reads as accidental misalignment instead of a deliberate playful gesture.',
+		);
+	}
+
+	return $issues;
+}
+
+/**
+ * Map a boxed CSS selector to a broader section family key.
+ *
+ * @param string $selector CSS selector.
+ * @return string
+ */
+function mcp_abilities_gutenberg_get_boxed_section_family_key( string $selector ): string {
+	$selector_lc = strtolower( $selector );
+
+	if ( preg_match( '/alignfull\s*>\s*div:nth-child\(\s*(\d+)\s*\)/i', $selector_lc, $matches ) ) {
+		return 'alignfull-section-' . (string) (int) $matches[1];
+	}
+
+	if ( preg_match( '/\.wp-block-columns(?:[^a-z0-9_-]|$)/i', $selector_lc ) ) {
+		return 'columns-layout';
+	}
+
+	if ( preg_match( '/\.wp-block-column(?:[^a-z0-9_-]|$)/i', $selector_lc ) ) {
+		return 'column-module';
+	}
+
+	if ( preg_match( '/\.wp-block-quote(?:[^a-z0-9_-]|$)/i', $selector_lc ) ) {
+		return 'quote-module';
+	}
+
+	if ( preg_match( '/\.wp-block-group(?:[^a-z0-9_-]|$)/i', $selector_lc ) ) {
+		return 'group-module';
+	}
+
+	return '';
+}
+
+/**
+ * Detect overuse of boxed/card treatments across a page.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_card_monotony_issues( string $css, string $source ): array {
+	$selectors         = array();
+	$section_families  = array();
+	$component_classes = array();
+	$boxed_rule_count  = 0;
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return array();
+	}
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = strtolower( trim( (string) ( $rule[2] ?? '' ) ) );
+		if ( '' === $selector_block || '' === $declarations ) {
+			continue;
+		}
+
+		$looks_boxed = false !== strpos( $declarations, 'border-radius' )
+			&& (
+				false !== strpos( $declarations, 'box-shadow' )
+				|| false !== strpos( $declarations, 'background' )
+				|| false !== strpos( $declarations, 'border:' )
+				|| false !== strpos( $declarations, 'border-width' )
+			);
+
+		if ( ! $looks_boxed ) {
+			continue;
+		}
+
+		++$boxed_rule_count;
+		$selector_lc = strtolower( $selector_block );
+		if ( false === strpos( $selector_lc, 'wp-block-group' ) && false === strpos( $selector_lc, 'wp-block-quote' ) && false === strpos( $selector_lc, 'wp-block-column' ) ) {
+			continue;
+		}
+
+		$selectors[] = mcp_abilities_gutenberg_compact_css_snippet( $selector_block );
+
+		$family_key = mcp_abilities_gutenberg_get_boxed_section_family_key( $selector_block );
+		if ( '' !== $family_key ) {
+			$section_families[] = $family_key;
+		}
+
+		if ( false !== strpos( $selector_lc, 'wp-block-columns' ) ) {
+			$component_classes[] = 'wp-block-columns';
+		}
+		if ( false !== strpos( $selector_lc, 'wp-block-column' ) ) {
+			$component_classes[] = 'wp-block-column';
+		}
+		if ( false !== strpos( $selector_lc, 'wp-block-group' ) ) {
+			$component_classes[] = 'wp-block-group';
+		}
+		if ( false !== strpos( $selector_lc, 'wp-block-quote' ) ) {
+			$component_classes[] = 'wp-block-quote';
+		}
+	}
+
+	$selectors         = array_values( array_unique( array_filter( $selectors ) ) );
+	$section_families  = array_values( array_unique( array_filter( $section_families ) ) );
+	$component_classes = array_values( array_unique( array_filter( $component_classes ) ) );
+
+	$has_section_spread    = count( $section_families ) >= 3;
+	$has_component_spread  = count( $component_classes ) >= 3;
+	$has_selector_density  = count( $selectors ) >= 4;
+	$has_rule_density      = $boxed_rule_count >= 5;
+
+	if ( ( ! $has_section_spread && ! $has_component_spread ) || ( ! $has_selector_density && ! $has_rule_density ) ) {
+		return array();
+	}
+
+	return array(
+		array(
+			'type'              => 'card_monotony_risk',
+			'severity'          => 'notice',
+			'source'            => $source,
+			'count'             => count( $selectors ),
+			'boxed_rule_count'  => $boxed_rule_count,
+			'selectors'         => array_slice( $selectors, 0, 8 ),
+			'section_families'  => array_slice( $section_families, 0, 8 ),
+			'component_classes' => $component_classes,
+			'message'           => 'Too many major sections are being treated like contained cards or boxed panels. AI-generated pages often flatten into repeated rounded modules unless some sections stay open, linear, or full-bleed.',
+		),
+	);
+}
+
+/**
+ * Detect overuse of rendered boxed modules from inline Gutenberg markup.
+ *
+ * @param string $html Rendered Gutenberg HTML.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_rendered_boxed_module_issues( string $html, string $source ): array {
+	if ( '' === trim( $html ) ) {
+		return array();
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-design-root">' . $html . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array();
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-design-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( ! $root instanceof DOMElement ) {
+		return array();
+	}
+
+	$nodes = $xpath->query(
+		'.//*[contains(concat(" ", normalize-space(@class), " "), " wp-block-group ")
+			or contains(concat(" ", normalize-space(@class), " "), " wp-block-quote ")
+			or contains(concat(" ", normalize-space(@class), " "), " wp-block-column ")]',
+		$root
+	);
+	if ( ! $nodes instanceof DOMNodeList || 0 === $nodes->length ) {
+		return array();
+	}
+
+	$examples        = array();
+	$module_types    = array();
+	$section_families = array();
+	$boxed_count     = 0;
+
+	foreach ( $nodes as $node ) {
+		if ( ! $node instanceof DOMElement ) {
+			continue;
+		}
+
+		$class = ' ' . strtolower( trim( (string) $node->getAttribute( 'class' ) ) ) . ' ';
+		$style = strtolower( trim( (string) $node->getAttribute( 'style' ) ) );
+
+		$has_radius = false !== strpos( $style, 'border-radius' );
+		$has_box_treatment = false !== strpos( $style, 'background' )
+			|| false !== strpos( $style, 'border:' )
+			|| false !== strpos( $style, 'box-shadow' )
+			|| false !== strpos( $class, ' has-background ' );
+
+		if ( ! $has_radius || ! $has_box_treatment ) {
+			continue;
+		}
+
+		++$boxed_count;
+		$examples[] = mcp_abilities_gutenberg_describe_dom_element( $node );
+
+		if ( false !== strpos( $class, ' wp-block-quote ' ) ) {
+			$module_types[] = 'wp-block-quote';
+		} elseif ( false !== strpos( $class, ' wp-block-column ' ) ) {
+			$module_types[] = 'wp-block-column';
+		} else {
+			$module_types[] = 'wp-block-group';
+		}
+
+		$parent = $node->parentNode;
+		while ( $parent instanceof DOMElement ) {
+			$parent_class = ' ' . strtolower( trim( (string) $parent->getAttribute( 'class' ) ) ) . ' ';
+			if ( false !== strpos( $parent_class, ' wp-block-group ' ) || false !== strpos( $parent_class, ' wp-block-columns ' ) ) {
+				$section_families[] = mcp_abilities_gutenberg_describe_dom_element( $parent );
+				break;
+			}
+			$parent = $parent->parentNode;
+		}
+	}
+
+	$examples         = array_values( array_unique( array_filter( $examples ) ) );
+	$module_types     = array_values( array_unique( array_filter( $module_types ) ) );
+	$section_families = array_values( array_unique( array_filter( $section_families ) ) );
+
+	if ( $boxed_count < 5 || count( $section_families ) < 3 ) {
+		return array();
+	}
+
+	return array(
+		array(
+			'type'              => 'card_monotony_risk',
+			'severity'          => 'notice',
+			'source'            => $source,
+			'count'             => $boxed_count,
+			'selectors'         => array_slice( $examples, 0, 8 ),
+			'section_families'  => array_slice( $section_families, 0, 8 ),
+			'component_classes' => $module_types,
+			'message'           => 'Too many rendered sections resolve into contained rounded modules. Gutenberg pages feel stronger when some sections stay open, linear, or full-bleed instead of turning every content beat into a card.',
+		),
+	);
+}
+
+/**
+ * Determine whether a rendered Gutenberg element reads as a boxed/card treatment.
+ *
+ * @param DOMElement $element Element to inspect.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_dom_element_has_box_treatment( DOMElement $element ): bool {
+	$class = ' ' . strtolower( trim( (string) $element->getAttribute( 'class' ) ) ) . ' ';
+	$style = strtolower( trim( (string) $element->getAttribute( 'style' ) ) );
+
+	$has_radius = false !== strpos( $style, 'border-radius' );
+	$has_box_treatment = false !== strpos( $style, 'background' )
+		|| false !== strpos( $style, 'border:' )
+		|| false !== strpos( $style, 'box-shadow' )
+		|| false !== strpos( $class, ' has-background ' );
+
+	return $has_radius && $has_box_treatment;
+}
+
+/**
+ * Detect inconsistent treatment inside repeated rendered rows.
+ *
+ * @param string $html Rendered Gutenberg HTML.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_rendered_row_treatment_issues( string $html, string $source ): array {
+	if ( '' === trim( $html ) ) {
+		return array();
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-design-root">' . $html . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array();
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-design-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( ! $root instanceof DOMElement ) {
+		return array();
+	}
+
+	$rows = $xpath->query(
+		'.//*[contains(concat(" ", normalize-space(@class), " "), " wp-block-columns ")]',
+		$root
+	);
+	if ( ! $rows instanceof DOMNodeList || 0 === $rows->length ) {
+		return array();
+	}
+
+	$issues = array();
+
+	foreach ( $rows as $row ) {
+		if ( ! $row instanceof DOMElement ) {
+			continue;
+		}
+
+		$children = array();
+		foreach ( $row->childNodes as $child_node ) {
+			if ( ! $child_node instanceof DOMElement ) {
+				continue;
+			}
+
+			$child_class = ' ' . strtolower( trim( (string) $child_node->getAttribute( 'class' ) ) ) . ' ';
+			if ( false === strpos( $child_class, ' wp-block-column ' ) ) {
+				continue;
+			}
+
+			$children[] = $child_node;
+		}
+
+		if ( count( $children ) < 3 ) {
+			continue;
+		}
+
+		$boxed_indices = array();
+		$open_indices  = array();
+		$examples      = array();
+
+		foreach ( $children as $index => $child ) {
+			$is_boxed = mcp_abilities_gutenberg_dom_element_has_box_treatment( $child );
+
+			if ( ! $is_boxed ) {
+				foreach ( $child->childNodes as $grandchild ) {
+					if ( ! $grandchild instanceof DOMElement ) {
+						continue;
+					}
+
+					if ( mcp_abilities_gutenberg_dom_element_has_box_treatment( $grandchild ) ) {
+						$is_boxed = true;
+						break;
+					}
+				}
+			}
+
+			$human_index = $index + 1;
+			if ( $is_boxed ) {
+				$boxed_indices[] = $human_index;
+				$examples[]      = mcp_abilities_gutenberg_describe_dom_element( $child );
+			} else {
+				$open_indices[] = $human_index;
+			}
+		}
+
+		if ( empty( $boxed_indices ) || empty( $open_indices ) ) {
+			continue;
+		}
+
+		if ( 1 !== count( $boxed_indices ) && 1 !== count( $open_indices ) ) {
+			continue;
+		}
+
+		$issues[] = array(
+			'type'        => 'row_treatment_inconsistency',
+			'severity'    => 'notice',
+			'source'      => $source,
+			'selector'    => mcp_abilities_gutenberg_describe_dom_element( $row ),
+			'row_size'    => count( $children ),
+			'boxed_items' => $boxed_indices,
+			'open_items'  => $open_indices,
+			'examples'    => array_values( array_unique( array_slice( $examples, 0, 3 ) ) ),
+			'message'     => 'A repeated row mixes one boxed/card-like sibling with otherwise open siblings. That usually reads as accidental rather than intentional unless the standout item is clearly meant to be a spotlight.',
+		);
+	}
+
+	return $issues;
+}
+
+/**
+ * Build a compact structural signature for a rendered module.
+ *
+ * @param DOMElement $element Element to describe.
+ * @return string
+ */
+function mcp_abilities_gutenberg_get_dom_structure_signature( DOMElement $element ): string {
+	$tokens = array();
+	$walker = static function ( DOMElement $node ) use ( &$walker, &$tokens ): void {
+		if ( count( $tokens ) >= 12 ) {
+			return;
+		}
+
+		$class = strtolower( trim( (string) $node->getAttribute( 'class' ) ) );
+		if ( '' !== $class ) {
+			foreach ( preg_split( '/\s+/', $class ) as $class_name ) {
+				$class_name = strtolower( trim( (string) $class_name ) );
+				if ( '' === $class_name ) {
+					continue;
+				}
+
+				if ( 0 === strpos( $class_name, 'wp-block-' ) || 'wp-element-button' === $class_name ) {
+					$tokens[] = $class_name;
+					if ( count( $tokens ) >= 12 ) {
+						return;
+					}
+				}
+			}
+		}
+
+		foreach ( $node->childNodes as $child ) {
+			if ( $child instanceof DOMElement ) {
+				$walker( $child );
+				if ( count( $tokens ) >= 12 ) {
+					return;
+				}
+			}
+		}
+	};
+
+	$walker( $element );
+
+	if ( empty( $tokens ) ) {
+		return strtolower( $element->tagName );
+	}
+
+	return implode( '|', array_slice( $tokens, 0, 12 ) );
+}
+
+/**
+ * Detect repeated sibling modules that receive conflicting treatments.
+ *
+ * @param string $html Rendered Gutenberg HTML.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_repeated_object_treatment_issues( string $html, string $source ): array {
+	if ( '' === trim( $html ) ) {
+		return array();
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-design-root">' . $html . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array();
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-design-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( ! $root instanceof DOMElement ) {
+		return array();
+	}
+
+	$rows = $xpath->query(
+		'.//*[contains(concat(" ", normalize-space(@class), " "), " wp-block-columns ")]',
+		$root
+	);
+	if ( ! $rows instanceof DOMNodeList || 0 === $rows->length ) {
+		return array();
+	}
+
+	$issues = array();
+
+	foreach ( $rows as $row ) {
+		if ( ! $row instanceof DOMElement ) {
+			continue;
+		}
+
+		$children = array();
+		foreach ( $row->childNodes as $child_node ) {
+			if ( ! $child_node instanceof DOMElement ) {
+				continue;
+			}
+
+			$child_class = ' ' . strtolower( trim( (string) $child_node->getAttribute( 'class' ) ) ) . ' ';
+			if ( false === strpos( $child_class, ' wp-block-column ' ) ) {
+				continue;
+			}
+
+			$children[] = $child_node;
+		}
+
+		if ( count( $children ) < 2 ) {
+			continue;
+		}
+
+		$families = array();
+
+		foreach ( $children as $index => $child ) {
+			$signature = mcp_abilities_gutenberg_get_dom_structure_signature( $child );
+			if ( '' === $signature ) {
+				continue;
+			}
+
+			$is_boxed = mcp_abilities_gutenberg_dom_element_has_box_treatment( $child );
+			if ( ! $is_boxed ) {
+				foreach ( $child->childNodes as $grandchild ) {
+					if ( $grandchild instanceof DOMElement && mcp_abilities_gutenberg_dom_element_has_box_treatment( $grandchild ) ) {
+						$is_boxed = true;
+						break;
+					}
+				}
+			}
+
+			if ( ! isset( $families[ $signature ] ) ) {
+				$families[ $signature ] = array(
+					'boxed'    => array(),
+					'open'     => array(),
+					'examples' => array(),
+				);
+			}
+
+			$human_index = $index + 1;
+			if ( $is_boxed ) {
+				$families[ $signature ]['boxed'][] = $human_index;
+			} else {
+				$families[ $signature ]['open'][] = $human_index;
+			}
+			$families[ $signature ]['examples'][] = mcp_abilities_gutenberg_describe_dom_element( $child );
+		}
+
+		foreach ( $families as $signature => $family ) {
+			$total = count( $family['boxed'] ) + count( $family['open'] );
+			if ( $total < 2 || empty( $family['boxed'] ) || empty( $family['open'] ) ) {
+				continue;
+			}
+
+			$issues[] = array(
+				'type'          => 'repeated_object_treatment_inconsistency',
+				'severity'      => 'notice',
+				'source'        => $source,
+				'selector'      => mcp_abilities_gutenberg_describe_dom_element( $row ),
+				'family'        => $signature,
+				'row_size'      => count( $children ),
+				'boxed_items'   => array_values( $family['boxed'] ),
+				'open_items'    => array_values( $family['open'] ),
+				'examples'      => array_values( array_unique( array_slice( $family['examples'], 0, 3 ) ) ),
+				'message'       => 'Repeated sibling modules that appear to belong to the same object family are being treated differently. When the same object repeats, its containment style should usually repeat too unless one instance is very clearly featured.',
+			);
+		}
+	}
+
+	return $issues;
+}
+
+/**
+ * Detect drifting section spacing rhythm from authored Gutenberg block values.
+ *
+ * @param string $content Raw Gutenberg content.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_block_spacing_rhythm_issues( string $content ): array {
+	$blocks = parse_blocks( $content );
+	if ( ! is_array( $blocks ) || count( $blocks ) < 3 ) {
+		return array();
+	}
+
+	$entries = array();
+
+	foreach ( $blocks as $index => $block ) {
+		$block_name = (string) ( $block['blockName'] ?? '' );
+		$attrs      = is_array( $block['attrs'] ?? null ) ? $block['attrs'] : array();
+		$values     = array();
+
+		if ( 'core/spacer' === $block_name ) {
+			$height_px = mcp_abilities_gutenberg_parse_spacing_value_to_px( (string) ( $attrs['height'] ?? '' ) );
+			if ( is_float( $height_px ) && $height_px >= 24 ) {
+				$values[] = array(
+					'value' => (string) $attrs['height'],
+					'px'    => $height_px,
+				);
+			}
+		}
+
+		$spacing = is_array( $attrs['style']['spacing'] ?? null ) ? $attrs['style']['spacing'] : array();
+		foreach ( array( 'padding', 'margin' ) as $spacing_type ) {
+			$spacing_values = is_array( $spacing[ $spacing_type ] ?? null ) ? $spacing[ $spacing_type ] : array();
+			foreach ( array( 'top', 'bottom' ) as $direction ) {
+				$raw_value = (string) ( $spacing_values[ $direction ] ?? '' );
+				$px_value  = mcp_abilities_gutenberg_parse_spacing_value_to_px( $raw_value );
+				if ( is_float( $px_value ) && $px_value >= 24 ) {
+					$values[] = array(
+						'value' => $raw_value,
+						'px'    => $px_value,
+					);
+				}
+			}
+		}
+
+		if ( empty( $values ) ) {
+			continue;
+		}
+
+		foreach ( $values as $value ) {
+			$entries[] = array(
+				'block_index' => $index + 1,
+				'block_name'  => $block_name,
+				'value'       => (string) $value['value'],
+				'px'          => (float) $value['px'],
+				'selector'    => sprintf( 'top-level[%d] %s', $index + 1, '' !== $block_name ? $block_name : 'anonymous-block' ),
+			);
+		}
+	}
+
+	if ( count( $entries ) < 3 ) {
+		return array();
+	}
+
+	$normalized_values = array();
+	foreach ( $entries as $entry ) {
+		$normalized_values[] = (int) ( round( (float) $entry['px'] / 4 ) * 4 );
+	}
+	$normalized_values = array_values( array_unique( $normalized_values ) );
+	sort( $normalized_values );
+
+	$min_spacing      = min( $normalized_values );
+	$max_spacing      = max( $normalized_values );
+	$has_value_sprawl = count( $normalized_values ) >= 3;
+	$has_large_outlier = $max_spacing >= max( 96, (int) round( $min_spacing * 1.8 ) );
+
+	if ( ! $has_value_sprawl && ! $has_large_outlier ) {
+		return array();
+	}
+
+	return array(
+		array(
+			'type'               => 'spacing_rhythm_drift',
+			'severity'           => 'notice',
+			'source'             => 'block-structure',
+			'count'              => count( $entries ),
+			'values'             => array_map(
+				static function ( int $value ): string {
+					return $value . 'px';
+				},
+				array_slice( $normalized_values, 0, 8 )
+			),
+			'examples'           => array_values( array_unique( array_slice( array_map( 'strval', wp_list_pluck( $entries, 'selector' ) ), 0, 8 ) ) ),
+			'largest_spacing_px' => $max_spacing,
+			'message'            => 'Major section spacing uses several unrelated distances. Pages usually feel more balanced when vertical rhythm comes from a smaller spacing token set instead of one-off paddings, margins, and spacer heights.',
+		),
+	);
+}
+
+/**
+ * Collect layout-risk issues directly from Gutenberg content markup.
+ *
+ * @param string $content Raw Gutenberg post content.
+ * @return array{issues: array<int,array<string,mixed>>, embedded_style_block_count: int, inline_style_count: int, content_measures: array<int,array<string,mixed>>, shell_full_width_css_detected: bool}
+ */
+function mcp_abilities_gutenberg_collect_content_layout_risks( string $content ): array {
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-layout-root">' . $content . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array(
+			'issues'                    => array(),
+			'embedded_style_block_count'=> 0,
+			'inline_style_count'        => 0,
+			'content_measures'          => array(),
+			'shell_full_width_css_detected' => false,
+		);
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-layout-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+
+	if ( ! $root instanceof DOMElement ) {
+		return array(
+			'issues'                    => array(),
+			'embedded_style_block_count'=> 0,
+			'inline_style_count'        => 0,
+			'content_measures'          => array(),
+			'shell_full_width_css_detected' => false,
+		);
+	}
+
+	$issues                   = array();
+	$embedded_style_block_count = 0;
+	$content_measures         = array();
+	$full_width_shell_css_snippets = array();
+	$style_nodes              = $xpath->query( './/style', $root );
+
+	if ( $style_nodes instanceof DOMNodeList && $style_nodes->length > 0 ) {
+		$embedded_style_block_count = $style_nodes->length;
+
+		for ( $index = 0; $index < $style_nodes->length; $index++ ) {
+			$style_node = $style_nodes->item( $index );
+			if ( ! $style_node instanceof DOMElement ) {
+				continue;
+			}
+
+			$css = trim( (string) $style_node->textContent );
+			if ( '' === $css ) {
+				continue;
+			}
+
+			$full_width_shell_css_snippets = array_merge(
+				$full_width_shell_css_snippets,
+				mcp_abilities_gutenberg_detect_full_width_shell_css_snippets( $css )
+			);
+			$content_measures = array_merge(
+				$content_measures,
+				mcp_abilities_gutenberg_collect_css_content_measures(
+					$css,
+					sprintf( 'embedded-style-block-%d', $index + 1 )
+				)
+			);
+			$issues = array_merge(
+				$issues,
+				mcp_abilities_gutenberg_collect_css_sibling_treatment_issues(
+					$css,
+					sprintf( 'embedded-style-block-%d', $index + 1 )
+				),
+				mcp_abilities_gutenberg_collect_css_button_contrast_issues(
+					$css,
+					sprintf( 'embedded-style-block-%d', $index + 1 )
+				),
+				mcp_abilities_gutenberg_collect_css_trailing_gap_issues(
+					$css,
+					sprintf( 'embedded-style-block-%d', $index + 1 )
+				),
+				mcp_abilities_gutenberg_collect_css_design_token_sprawl_issues(
+					$css,
+					sprintf( 'embedded-style-block-%d', $index + 1 )
+				),
+				mcp_abilities_gutenberg_collect_css_card_monotony_issues(
+					$css,
+					sprintf( 'embedded-style-block-%d', $index + 1 )
+				),
+				mcp_abilities_gutenberg_collect_css_layout_risks(
+					$css,
+					sprintf( 'embedded-style-block-%d', $index + 1 )
+				)
+			);
+		}
+	}
+
+	$inline_style_risks = mcp_abilities_gutenberg_collect_inline_style_layout_risks( $xpath, $root );
+	if ( ! empty( $inline_style_risks['issues'] ) ) {
+		$issues = array_merge( $issues, $inline_style_risks['issues'] );
+	}
+
+	$full_width_shell_css_snippets = array_values( array_unique( $full_width_shell_css_snippets ) );
+	$alignfull_nodes = $xpath->query(
+		'.//*[contains(concat(" ", normalize-space(@class), " "), " alignfull ")]',
+		$root
+	);
+	$alignfull_count = $alignfull_nodes instanceof DOMNodeList ? $alignfull_nodes->length : 0;
+	if ( $alignfull_count > 0 && ! empty( $full_width_shell_css_snippets ) ) {
+		$selectors = array();
+		for ( $index = 0; $index < min( 3, $alignfull_count ); $index++ ) {
+			$alignfull_node = $alignfull_nodes->item( $index );
+			if ( $alignfull_node instanceof DOMElement ) {
+				$selectors[] = mcp_abilities_gutenberg_describe_dom_element( $alignfull_node );
+			}
+		}
+
+		$issues[] = array(
+			'type'      => 'alignfull_breakout_risk',
+			'severity'  => 'warning',
+			'count'     => $alignfull_count,
+			'selectors' => $selectors,
+			'snippets'  => array_slice( $full_width_shell_css_snippets, 0, 3 ),
+			'message'   => 'Content mixes alignfull Gutenberg blocks with CSS that already forces the surrounding shell to full width; theme breakout margins can then create horizontal page scrolling. Prefer neutralized alignfull margins or non-breakout full-width wrappers.',
+		);
+	}
+
+	$issues = array_merge(
+		$issues,
+		mcp_abilities_gutenberg_collect_width_system_risks( $content_measures, 'embedded-style-blocks' )
+	);
+
+	return array(
+		'issues'                    => $issues,
+		'embedded_style_block_count'=> $embedded_style_block_count,
+		'inline_style_count'        => (int) $inline_style_risks['count'],
+		'content_measures'          => $content_measures,
+		'shell_full_width_css_detected' => ! empty( $full_width_shell_css_snippets ),
+	);
+}
+
+/**
+ * Detect CSS that explicitly forces the rendered page shell to full width.
+ *
+ * @param string $css CSS to inspect.
+ * @return array<int,string>
+ */
+function mcp_abilities_gutenberg_detect_full_width_shell_css_snippets( string $css ): array {
+	$snippets = array();
+	$patterns = array(
+		'/(?:main|\.site-main|\.page-content|\.entry-content)[^{]*\{[^}]*max-width\s*:\s*none[^}]*width\s*:\s*100%[^}]*\}/i',
+		'/(?:main|\.site-main)[^{]*\{[^}]*margin\s*:\s*0[^}]*max-width\s*:\s*none[^}]*\}/i',
+	);
+
+	foreach ( $patterns as $pattern ) {
+		if ( preg_match_all( $pattern, $css, $matches ) ) {
+			foreach ( $matches[0] as $match ) {
+				$snippets[] = mcp_abilities_gutenberg_compact_css_snippet( (string) $match );
+			}
+		}
+	}
+
+	return array_values( array_unique( $snippets ) );
+}
+
+/**
+ * Fail content writes when they contain high-confidence editor/render layout risks.
+ *
+ * @param string $content Raw Gutenberg content.
+ * @return true|WP_Error
+ */
+function mcp_abilities_gutenberg_assert_layout_safe_for_write( string $content ) {
+	$layout_risks = mcp_abilities_gutenberg_collect_content_layout_risks( $content );
+	$blocking_types = array(
+		'layout_overlap_risk',
+		'scroll_region_risk',
+		'viewport_overflow_risk',
+		'transform_offset_risk',
+		'position_overlay_risk',
+		'alignfull_breakout_risk',
+	);
+
+	$blocking_issues = array_values(
+		array_filter(
+			$layout_risks['issues'],
+			static function ( array $issue ) use ( $blocking_types ): bool {
+				return in_array( (string) ( $issue['type'] ?? '' ), $blocking_types, true );
+			}
+		)
+	);
+
+	if ( empty( $blocking_issues ) ) {
+		return true;
+	}
+
+	$issue_types = array_values(
+		array_unique(
+			array_map(
+				static function ( array $issue ): string {
+					return (string) ( $issue['type'] ?? '' );
+				},
+				$blocking_issues
+			)
+		)
+	);
+	$snippets = array();
+	foreach ( array_slice( $blocking_issues, 0, 3 ) as $issue ) {
+		if ( ! empty( $issue['snippets'] ) && is_array( $issue['snippets'] ) ) {
+			foreach ( array_slice( $issue['snippets'], 0, 2 ) as $snippet ) {
+				$snippets[] = (string) $snippet;
+			}
+		}
+	}
+	$snippets = array_values( array_unique( array_filter( $snippets ) ) );
+	$message  = 'Blocked save because the content contains layout-risk CSS that can break editor or frontend rendering.';
+	if ( ! empty( $issue_types ) ) {
+		$message .= ' Types: ' . implode( ', ', $issue_types ) . '.';
+	}
+	if ( ! empty( $snippets ) ) {
+		$message .= ' Snippets: ' . implode( ' | ', array_slice( $snippets, 0, 4 ) ) . '.';
+	}
+
+	return new WP_Error(
+		'mcp_gutenberg_editor_layout_risk_blocked',
+		$message,
+		array(
+			'issues' => $blocking_issues,
+		)
+	);
+}
+
+/**
  * Evaluate rendered page context for a post/page.
  *
  * @param int $post_id Post ID.
@@ -2239,15 +4810,23 @@ function mcp_abilities_gutenberg_evaluate_render_context( int $post_id ) {
 
 	$xpath        = new DOMXPath( $document );
 	$main_nodes   = $xpath->query( '//main' );
-	$entry_nodes  = $xpath->query( '//*[contains(concat(" ", normalize-space(@class), " "), " entry-content ")]' );
+	$content_nodes = $xpath->query(
+		'//*[contains(concat(" ", normalize-space(@class), " "), " entry-content ") or contains(concat(" ", normalize-space(@class), " "), " page-content ")]'
+	);
 	$issues       = array();
 	$observations = array(
 		'main_found'                => $main_nodes instanceof DOMNodeList && $main_nodes->length > 0,
-		'entry_content_found'       => $entry_nodes instanceof DOMNodeList && $entry_nodes->length > 0,
+		'content_wrapper_found'     => $content_nodes instanceof DOMNodeList && $content_nodes->length > 0,
+		'content_wrapper_selector'  => '',
 		'main_child_element_count'  => 0,
-		'pre_entry_sibling_count'   => 0,
-		'leading_entry_child_tag'   => '',
-		'leading_entry_child_path'  => '',
+		'pre_content_sibling_count' => 0,
+		'leading_content_child_tag' => '',
+		'leading_content_child_path'=> '',
+		'embedded_style_block_count'=> 0,
+		'inline_style_count'       => 0,
+		'alignfull_block_count'    => 0,
+		'shell_full_width_css_detected' => false,
+		'content_measure_values'   => array(),
 	);
 
 	if ( ! $observations['main_found'] ) {
@@ -2258,19 +4837,20 @@ function mcp_abilities_gutenberg_evaluate_render_context( int $post_id ) {
 		);
 	}
 
-	if ( ! $observations['entry_content_found'] ) {
+	if ( ! $observations['content_wrapper_found'] ) {
 		$issues[] = array(
-			'type'     => 'missing_entry_content',
+			'type'     => 'missing_content_wrapper',
 			'severity' => 'error',
-			'message'  => 'Rendered page is missing an .entry-content wrapper.',
+			'message'  => 'Rendered page is missing an .entry-content or .page-content wrapper.',
 		);
 	}
 
-	if ( $observations['main_found'] && $observations['entry_content_found'] ) {
+	if ( $observations['main_found'] && $observations['content_wrapper_found'] ) {
 		$main          = $main_nodes->item( 0 );
-		$entry_content = $entry_nodes->item( 0 );
+		$content_wrapper = $content_nodes->item( 0 );
 
-		if ( $main instanceof DOMElement && $entry_content instanceof DOMElement ) {
+		if ( $main instanceof DOMElement && $content_wrapper instanceof DOMElement ) {
+			$observations['content_wrapper_selector'] = mcp_abilities_gutenberg_describe_dom_element( $content_wrapper );
 			$main_children = array();
 			foreach ( $main->childNodes as $child ) {
 				if ( $child instanceof DOMElement ) {
@@ -2282,37 +4862,37 @@ function mcp_abilities_gutenberg_evaluate_render_context( int $post_id ) {
 
 			$pre_entry_siblings = array();
 			foreach ( $main_children as $child ) {
-				if ( $child->isSameNode( $entry_content ) ) {
+				if ( $child->isSameNode( $content_wrapper ) ) {
 					break;
 				}
 				$pre_entry_siblings[] = $child;
 			}
 
-			$observations['pre_entry_sibling_count'] = count( $pre_entry_siblings );
+			$observations['pre_content_sibling_count'] = count( $pre_entry_siblings );
 
 			if ( ! empty( $pre_entry_siblings ) ) {
 				$issues[] = array(
-					'type'      => 'pre_entry_wrappers',
+					'type'      => 'pre_content_wrappers',
 					'severity'  => 'warning',
 					'count'     => count( $pre_entry_siblings ),
 					'selectors' => array_map( 'mcp_abilities_gutenberg_describe_dom_element', $pre_entry_siblings ),
-					'message'   => 'Rendered page contains wrapper elements before .entry-content inside <main>; these can create unexpected spacing or layout chrome above the first content block.',
+					'message'   => 'Rendered page contains wrapper elements before the main content wrapper inside <main>; these can create unexpected spacing or layout chrome above the first content block.',
 				);
 
 				foreach ( $pre_entry_siblings as $sibling ) {
 					if ( ! mcp_abilities_gutenberg_dom_element_has_meaningful_content( $sibling ) ) {
 						$issues[] = array(
-							'type'     => 'empty_pre_entry_wrapper',
+							'type'     => 'empty_pre_content_wrapper',
 							'severity' => 'warning',
 							'selector' => mcp_abilities_gutenberg_describe_dom_element( $sibling ),
-							'message'  => 'An empty wrapper appears before .entry-content inside <main>; this often creates a visible gap above the hero.',
+							'message'  => 'An empty wrapper appears before the main content wrapper inside <main>; this often creates a visible gap above the hero.',
 						);
 					}
 				}
 			}
 
 			$entry_children = array();
-			foreach ( $entry_content->childNodes as $child ) {
+			foreach ( $content_wrapper->childNodes as $child ) {
 				if ( $child instanceof DOMElement ) {
 					$entry_children[] = $child;
 				}
@@ -2320,17 +4900,127 @@ function mcp_abilities_gutenberg_evaluate_render_context( int $post_id ) {
 
 			if ( ! empty( $entry_children ) ) {
 				$first_child = $entry_children[0];
-				$observations['leading_entry_child_tag']  = strtolower( $first_child->tagName );
-				$observations['leading_entry_child_path'] = mcp_abilities_gutenberg_describe_dom_element( $first_child );
+				$observations['leading_content_child_tag']  = strtolower( $first_child->tagName );
+				$observations['leading_content_child_path'] = mcp_abilities_gutenberg_describe_dom_element( $first_child );
 
 				if ( 'style' === strtolower( $first_child->tagName ) ) {
 					$issues[] = array(
 						'type'     => 'leading_style_block',
 						'severity' => 'warning',
 						'selector' => mcp_abilities_gutenberg_describe_dom_element( $first_child ),
-						'message'  => 'The first rendered child inside .entry-content is a style block; this can interact badly with theme flow spacing ahead of the hero.',
+						'message'  => 'The first rendered child inside the main content wrapper is a style block; this can interact badly with theme flow spacing ahead of the hero.',
 					);
 				}
+			}
+
+			$style_nodes = $xpath->query( './/style', $content_wrapper );
+			$full_width_shell_css_snippets = array();
+			$content_measures = array();
+			if ( $style_nodes instanceof DOMNodeList && $style_nodes->length > 0 ) {
+				$observations['embedded_style_block_count'] = $style_nodes->length;
+
+				for ( $index = 0; $index < $style_nodes->length; $index++ ) {
+					$style_node = $style_nodes->item( $index );
+					if ( ! $style_node instanceof DOMElement ) {
+						continue;
+					}
+
+					$css = trim( (string) $style_node->textContent );
+					if ( '' === $css ) {
+						continue;
+					}
+
+					$full_width_shell_css_snippets = array_merge(
+						$full_width_shell_css_snippets,
+						mcp_abilities_gutenberg_detect_full_width_shell_css_snippets( $css )
+					);
+					$content_measures = array_merge(
+						$content_measures,
+						mcp_abilities_gutenberg_collect_css_content_measures(
+							$css,
+							sprintf( 'embedded-style-block-%d', $index + 1 )
+						)
+					);
+
+					$issues = array_merge(
+						$issues,
+						mcp_abilities_gutenberg_collect_css_sibling_treatment_issues(
+							$css,
+							sprintf( 'embedded-style-block-%d', $index + 1 )
+						),
+						mcp_abilities_gutenberg_collect_css_button_contrast_issues(
+							$css,
+							sprintf( 'embedded-style-block-%d', $index + 1 )
+						),
+						mcp_abilities_gutenberg_collect_css_trailing_gap_issues(
+							$css,
+							sprintf( 'embedded-style-block-%d', $index + 1 )
+						),
+						mcp_abilities_gutenberg_collect_css_design_token_sprawl_issues(
+							$css,
+							sprintf( 'embedded-style-block-%d', $index + 1 )
+						),
+						mcp_abilities_gutenberg_collect_css_card_monotony_issues(
+							$css,
+							sprintf( 'embedded-style-block-%d', $index + 1 )
+						),
+						mcp_abilities_gutenberg_collect_css_layout_risks(
+							$css,
+							sprintf( 'embedded-style-block-%d', $index + 1 )
+						)
+					);
+				}
+			}
+			$full_width_shell_css_snippets = array_values( array_unique( $full_width_shell_css_snippets ) );
+			$observations['shell_full_width_css_detected'] = ! empty( $full_width_shell_css_snippets );
+			if ( ! empty( $content_measures ) ) {
+				$observations['content_measure_values'] = array_values(
+					array_unique(
+						array_map(
+							static function ( array $measure ): string {
+								return (string) ( $measure['value'] ?? '' );
+							},
+							$content_measures
+						)
+					)
+				);
+				$issues = array_merge(
+					$issues,
+					mcp_abilities_gutenberg_collect_width_system_risks( $content_measures, 'rendered-embedded-style-blocks' )
+				);
+			}
+
+			$inline_style_risks = mcp_abilities_gutenberg_collect_inline_style_layout_risks( $xpath, $content_wrapper );
+			$observations['inline_style_count'] = (int) $inline_style_risks['count'];
+			if ( ! empty( $inline_style_risks['issues'] ) ) {
+				$issues = array_merge( $issues, $inline_style_risks['issues'] );
+			}
+
+			$alignfull_nodes = $xpath->query(
+				'.//*[contains(concat(" ", normalize-space(@class), " "), " alignfull ")]',
+				$content_wrapper
+			);
+			if ( $alignfull_nodes instanceof DOMNodeList && $alignfull_nodes->length > 0 ) {
+				$observations['alignfull_block_count'] = $alignfull_nodes->length;
+			}
+
+			if ( $observations['alignfull_block_count'] > 0 && ! empty( $full_width_shell_css_snippets ) ) {
+				$selectors = array();
+				for ( $index = 0; $index < min( 3, $alignfull_nodes->length ); $index++ ) {
+					$alignfull_node = $alignfull_nodes->item( $index );
+					if ( $alignfull_node instanceof DOMElement ) {
+						$selectors[] = mcp_abilities_gutenberg_describe_dom_element( $alignfull_node );
+					}
+				}
+
+				$issues[] = array(
+					'type'      => 'alignfull_breakout_risk',
+					'severity'  => 'warning',
+					'count'     => (int) $observations['alignfull_block_count'],
+					'selectors' => $selectors,
+					'snippets'  => array_slice( $full_width_shell_css_snippets, 0, 3 ),
+					'message'   => 'Rendered content mixes alignfull Gutenberg blocks with CSS that already forces the surrounding shell to full width; theme breakout margins can then create horizontal page scrolling. Prefer neutralized alignfull margins or non-breakout full-width wrappers.',
+				);
 			}
 		}
 	}
@@ -2541,6 +5231,419 @@ function mcp_abilities_gutenberg_audit_content( string $content ): array {
 		'outline'    => $outline,
 		'issues'     => $issues,
 		'issue_count'=> count( $issues ),
+	);
+}
+
+/**
+ * Evaluate Gutenberg design coherence from block structure and embedded styling.
+ *
+ * @param string $content Raw content.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
+	$analysis     = mcp_abilities_gutenberg_analyze_content( $content );
+	$validation   = is_array( $analysis['validation'] ?? null ) ? $analysis['validation'] : array();
+	$layout_risks = is_array( $validation['layout_risks'] ?? null ) ? $validation['layout_risks'] : array();
+	$issues       = array();
+	$rendered_html = (string) ( $analysis['summary']['rendered_html'] ?? '' );
+	$content_measures         = is_array( $layout_risks['content_measures'] ?? null ) ? $layout_risks['content_measures'] : array();
+	$text_measures            = array();
+	$nested_container_measures = array();
+	$embedded_css_entries = array();
+	$signals      = array(
+		'content_measures'      => array_values( array_unique( array_filter( array_map( 'strval', wp_list_pluck( $content_measures, 'value' ) ) ) ) ),
+		'issue_types'           => array_values( array_unique( array_filter( array_map( 'strval', wp_list_pluck( is_array( $layout_risks['issues'] ?? null ) ? $layout_risks['issues'] : array(), 'type' ) ) ) ) ),
+		'has_full_bleed'        => in_array( 'alignfull_breakout_risk', array_map( 'strval', wp_list_pluck( is_array( $layout_risks['issues'] ?? null ) ? $layout_risks['issues'] : array(), 'type' ) ), true ),
+		'top_level_block_count' => (int) ( $validation['top_level_block_count'] ?? 0 ),
+	);
+
+	foreach ( is_array( $layout_risks['issues'] ?? null ) ? $layout_risks['issues'] : array() as $issue ) {
+		$type = (string) ( $issue['type'] ?? '' );
+		if ( in_array( $type, array( 'section_width_inconsistency_risk', 'sibling_treatment_inconsistency', 'row_treatment_inconsistency', 'repeated_object_treatment_inconsistency', 'noninteractive_control_affordance_risk', 'spacing_rhythm_drift', 'alignfull_breakout_risk', 'button_contrast_risk', 'trailing_content_gap_risk', 'design_token_sprawl', 'card_monotony_risk' ), true ) ) {
+			$issues[] = $issue;
+		}
+	}
+
+	$raw_embedded_css_entries = is_array( $validation['embedded_css'] ?? null ) ? $validation['embedded_css'] : array();
+	if ( ! empty( $raw_embedded_css_entries ) ) {
+		foreach ( $raw_embedded_css_entries as $css_entry ) {
+			if ( ! is_array( $css_entry ) || '' === trim( (string) ( $css_entry['css'] ?? '' ) ) ) {
+				continue;
+			}
+
+			$embedded_css_entries[] = array(
+				'source' => (string) ( $css_entry['source'] ?? 'embedded-css' ),
+				'css'    => (string) $css_entry['css'],
+			);
+		}
+	}
+
+	foreach ( mcp_abilities_gutenberg_extract_embedded_css_entries( $content ) as $css_entry ) {
+		$key = md5( (string) $css_entry['css'] );
+		$embedded_css_entries[ $key ] = $css_entry;
+	}
+
+	foreach ( array_values( $embedded_css_entries ) as $css_entry ) {
+		$css    = (string) ( $css_entry['css'] ?? '' );
+		$source = (string) ( $css_entry['source'] ?? 'embedded-css' );
+		if ( '' === $css ) {
+			continue;
+		}
+
+		$text_measures = array_merge(
+			$text_measures,
+			mcp_abilities_gutenberg_collect_css_text_measures( $css, $source )
+		);
+		$nested_container_measures = array_merge(
+			$nested_container_measures,
+			mcp_abilities_gutenberg_collect_css_nested_container_measures( $css, $source )
+		);
+		$issues = array_merge(
+			$issues,
+			mcp_abilities_gutenberg_collect_css_noninteractive_control_affordance_issues( $css, $rendered_html, $source ),
+			mcp_abilities_gutenberg_collect_css_hero_heading_contrast_issues( $css, $source ),
+			mcp_abilities_gutenberg_collect_css_subtle_tilt_issues( $css, $source ),
+			mcp_abilities_gutenberg_collect_css_repeated_object_treatment_issues( $css, $source )
+		);
+	}
+
+	$signals['text_measures'] = array_values( array_unique( array_filter( array_map( 'strval', wp_list_pluck( $text_measures, 'value' ) ) ) ) );
+	$signals['nested_container_measures'] = array_values( array_unique( array_filter( array_map( 'strval', wp_list_pluck( $nested_container_measures, 'value' ) ) ) ) );
+
+	$issues = array_merge(
+		$issues,
+		mcp_abilities_gutenberg_collect_internal_measure_mismatch_risks( $content_measures, array_merge( $text_measures, $nested_container_measures ), 'embedded-style-blocks' ),
+		mcp_abilities_gutenberg_collect_block_spacing_rhythm_issues( $content ),
+		mcp_abilities_gutenberg_collect_rendered_row_treatment_issues( $rendered_html, 'rendered-html' ),
+		mcp_abilities_gutenberg_collect_repeated_object_treatment_issues( $rendered_html, 'rendered-html' ),
+		mcp_abilities_gutenberg_collect_rendered_boxed_module_issues( $rendered_html, 'rendered-html' )
+	);
+
+	$signals['issue_types'] = array_values(
+		array_unique(
+			array_filter(
+				array_map(
+					'strval',
+					wp_list_pluck( $issues, 'type' )
+				)
+			)
+		)
+	);
+
+	$score = 100;
+	$blocking_issue_types = array();
+	foreach ( $issues as $issue ) {
+		$type = (string) ( $issue['type'] ?? '' );
+		if ( mcp_abilities_gutenberg_is_blocking_design_issue( $type ) ) {
+			$blocking_issue_types[] = $type;
+		}
+		if ( 'section_width_inconsistency_risk' === $type ) {
+			$score -= 18;
+		} elseif ( 'internal_measure_mismatch' === $type ) {
+			$score -= 14;
+		} elseif ( 'sibling_treatment_inconsistency' === $type ) {
+			$score -= 14;
+		} elseif ( 'row_treatment_inconsistency' === $type ) {
+			$score -= 14;
+		} elseif ( 'repeated_object_treatment_inconsistency' === $type ) {
+			$score -= 16;
+		} elseif ( 'noninteractive_control_affordance_risk' === $type ) {
+			$score -= 14;
+		} elseif ( 'spacing_rhythm_drift' === $type ) {
+			$score -= 12;
+		} elseif ( 'hero_heading_readability_risk' === $type ) {
+			$score -= 14;
+		} elseif ( 'subtle_tilt_ambiguity' === $type ) {
+			$score -= 8;
+		} elseif ( 'alignfull_breakout_risk' === $type ) {
+			$score -= 12;
+		} elseif ( 'button_contrast_risk' === $type ) {
+			$score -= 16;
+		} elseif ( 'trailing_content_gap_risk' === $type ) {
+			$score -= 8;
+		} elseif ( 'design_token_sprawl' === $type ) {
+			$score -= 8;
+		} elseif ( 'card_monotony_risk' === $type ) {
+			$score -= 12;
+		}
+	}
+	$score = max( 0, min( 100, $score ) );
+	$blocking_issue_types = array_values( array_unique( array_filter( array_map( 'strval', $blocking_issue_types ) ) ) );
+
+	$recommendations = array();
+	if ( in_array( 'section_width_inconsistency_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Use one primary interior content width for intro panels, cards, quotes, reusable rows, and CTA sections. Reserve full bleed for heroes, strips, or deliberate breakouts.';
+	}
+	if ( in_array( 'internal_measure_mismatch', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'When a section shares the page width, do not quietly cap the quote, text lane, or nested columns row inside it to a much narrower measure unless that asymmetry is very clearly intentional.';
+		$recommendations[] = 'In split editorial layouts, a shorter support column often needs vertical centering and a structural full-height divider. Otherwise the section can look abandoned even when the outer wrapper width is correct.';
+	}
+	if ( in_array( 'sibling_treatment_inconsistency', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'When a repeated row uses accent styling such as tilt, shadow, or background shifts, either style all siblings coherently or make one spotlight card obviously intentional.';
+	}
+	if ( in_array( 'row_treatment_inconsistency', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Do not let one sibling in a repeated row become a random boxed module while the others stay open. Either treat the whole row as one family or make the spotlight item unmistakably deliberate.';
+	}
+	if ( in_array( 'repeated_object_treatment_inconsistency', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'When the same object repeats, keep its containment treatment coherent. Do not let one instance become boxed, tinted, or elevated while the matching instance stays plain unless one is intentionally featured.';
+	}
+	if ( in_array( 'noninteractive_control_affordance_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Do not style non-clickable labels, tags, or proof chips like buttons. If an element is not interactive, it should read as metadata or supporting proof, not as a tappable control.';
+	}
+	if ( in_array( 'spacing_rhythm_drift', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Reuse a smaller set of vertical spacing distances between major sections. Balanced pages usually feel tighter when they alternate between a compact gap and a generous gap instead of inventing a new distance every time.';
+	}
+	if ( in_array( 'hero_heading_readability_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Give visually led hero headings an explicit high-contrast text treatment. Big type still disappears fast when warm gradients or image-led backgrounds sit too close in value.';
+	}
+	if ( in_array( 'subtle_tilt_ambiguity', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'If you rotate a note card or accent module, tilt it enough to read as intentional. Very small angles often feel like accidental misalignment.';
+	}
+	if ( in_array( 'alignfull_breakout_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'If the shell is already full width, neutralize alignfull breakout margins instead of stacking shell-level and block-level breakout logic.';
+	}
+	if ( in_array( 'button_contrast_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Give button text and fills enough contrast that the CTA reads as active and intentional at a glance.';
+	}
+	if ( in_array( 'trailing_content_gap_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Avoid large bottom padding on the main content wrapper unless the footer transition is intentional.';
+	}
+	if ( in_array( 'design_token_sprawl', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Reduce the number of corner-radius and shadow variants so repeated components feel like one system instead of many unrelated treatments.';
+	}
+	if ( in_array( 'card_monotony_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Break the page out of all-card mode. Keep some sections open, linear, or full-bleed so the design breathes.';
+	}
+
+	return array(
+		'score'           => $score,
+		'issues'          => $issues,
+		'issue_count'     => count( $issues ),
+		'passes'          => 0 === count( $blocking_issue_types ),
+		'blocking_issue_count' => count( $blocking_issue_types ),
+		'blocking_issue_types' => $blocking_issue_types,
+		'signals'         => $signals,
+		'recommendations' => $recommendations,
+		'summary'         => $analysis['summary'],
+	);
+}
+
+/**
+ * Suggest concrete design fixes for Gutenberg content.
+ *
+ * @param string $content Raw content.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array {
+	$evaluation  = mcp_abilities_gutenberg_evaluate_design( $content );
+	$issues      = is_array( $evaluation['issues'] ?? null ) ? $evaluation['issues'] : array();
+	$suggestions = array();
+	$added_types = array();
+
+	foreach ( $issues as $issue ) {
+		$type = (string) ( $issue['type'] ?? '' );
+
+		if ( 'section_width_inconsistency_risk' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values( array_map( 'strval', is_array( $issue['selectors'] ?? null ) ? $issue['selectors'] : array() ) ),
+				'problem'      => 'Major sections are using different fixed content widths.',
+				'fixes'        => array(
+					'Pick one main interior content width and reuse it across intro panels, card rows, quotes, reusable rows, and CTA sections.',
+					'Keep only heroes, strips, or intentional feature sections full bleed.',
+					'If one section needs to feel narrower, make that contrast obvious and deliberate rather than accidental.',
+				),
+			);
+		} elseif ( 'internal_measure_mismatch' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values( array_map( 'strval', is_array( $issue['selectors'] ?? null ) ? $issue['selectors'] : array() ) ),
+				'problem'      => 'A section shares the page width, but the usable lane inside it stays much narrower, so the section still feels visibly unfinished.',
+				'fixes'        => array(
+					'Let the inner quote, text block, or columns row inherit the section width rhythm unless a narrower editorial lane is the point of the design.',
+					'If you intentionally want a narrow text measure, pair it with a second visual anchor or asymmetrical composition so the empty side feels designed rather than abandoned.',
+					'Do not declare a quiet text max-width or leave a nested `.wp-block-columns` row at Gutenberg\'s smaller default measure inside a newly widened section and assume the problem is solved. The usable measure matters as much as the wrapper.',
+					'In two-column editorial sections, vertically center the smaller support column when its content is much shorter than the dominant column. Top alignment often makes the short column look stranded.',
+					'If the split layout uses a divider, attach it to the column or section structure so it spans the intended full height. A border on a short inner text wrapper usually makes the divider look accidentally truncated.',
+				),
+			);
+		} elseif ( 'sibling_treatment_inconsistency' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values( array_map( 'strval', is_array( $issue['examples'] ?? null ) ? $issue['examples'] : array() ) ),
+				'problem'      => 'Only part of a repeated component family uses accent styling.',
+				'fixes'        => array(
+					'Apply the treatment family across all siblings, even if the exact intensity differs slightly.',
+					'If one item is supposed to be the spotlight card, make it clearly dominant instead of leaving another item untreated by accident.',
+					'Prefer small controlled variation across a row instead of leaving one card visually disconnected from the set.',
+				),
+			);
+		} elseif ( 'row_treatment_inconsistency' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values(
+					array_filter(
+						array_merge(
+							array( (string) ( $issue['selector'] ?? '' ) ),
+							array_values( array_map( 'strval', is_array( $issue['examples'] ?? null ) ? $issue['examples'] : array() ) )
+						)
+					)
+				),
+				'problem'      => 'A repeated row mixes one boxed sibling with open siblings, so the row looks half-switched between two design systems.',
+				'fixes'        => array(
+					'Make the siblings share one treatment family: all open, all softly contained, or one obviously spotlighted item with stronger hierarchy.',
+					'If one item is meant to stand out, increase the contrast enough that it reads as a featured module instead of a stray leftover card.',
+					'When in doubt, remove the lone box treatment first. Open rows usually feel cleaner than one random contained column.',
+				),
+			);
+		} elseif ( 'repeated_object_treatment_inconsistency' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values(
+					array_filter(
+						array_merge(
+							array( (string) ( $issue['selector'] ?? '' ) ),
+							array_values( array_map( 'strval', is_array( $issue['examples'] ?? null ) ? $issue['examples'] : array() ) )
+						)
+					)
+				),
+				'problem'      => 'Matching repeated objects are being presented with different containment treatments, so they no longer read as the same component family.',
+				'fixes'        => array(
+					'If the same object repeats, keep its background, border, and elevation logic consistent across instances.',
+					'Only break that consistency when one instance is intentionally promoted into a feature state with clearly stronger hierarchy.',
+					'Compare repeated modules side by side; if one looks boxed and the other looks raw without a narrative reason, normalize them.',
+				),
+			);
+		} elseif ( 'noninteractive_control_affordance_risk' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values(
+					array_filter(
+						array_merge(
+							array( (string) ( $issue['selector'] ?? '' ) ),
+							array_values( array_map( 'strval', is_array( $issue['examples'] ?? null ) ? $issue['examples'] : array() ) )
+						)
+					)
+				),
+				'problem'      => 'Non-interactive labels are borrowing the visual language of buttons or pills, so they imply an action that does not exist.',
+				'fixes'        => array(
+					'Quiet the styling so the tokens read as metadata, scope labels, or proof instead of controls.',
+					'Reserve filled pill/button treatments for real links, filters, toggles, and calls to action.',
+					'If the labels genuinely need interaction, turn them into actual links or controls instead of keeping them inert.',
+				),
+			);
+		} elseif ( 'spacing_rhythm_drift' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values( array_map( 'strval', is_array( $issue['examples'] ?? null ) ? $issue['examples'] : array() ) ),
+				'problem'      => 'Major sections are separated by too many unrelated distances, so the page rhythm starts to feel arbitrary.',
+				'fixes'        => array(
+					'Reduce the page to a smaller spacing scale, for example one compact section gap and one generous section gap.',
+					'Prefer spacing on the section wrappers themselves instead of stacking several spacer blocks with different heights.',
+					'Reserve very large gaps for deliberate pauses such as hero-to-body transitions, not for ordinary section changes.',
+				),
+			);
+		} elseif ( 'hero_heading_readability_risk' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values(
+					array_filter(
+						array(
+							(string) ( $issue['selector'] ?? '' ),
+							(string) ( $issue['background_selector'] ?? '' ),
+						)
+					)
+				),
+				'problem'      => 'The main hero title does not separate strongly enough from its background treatment.',
+				'fixes'        => array(
+					'Set an explicit heading color with stronger contrast against the darkest and lightest background stops.',
+					'Use a subtle text shadow only as support, not as the primary contrast strategy.',
+					'Check the hero at a glance first: if the name or headline softens into the background, the display type is underpowered.',
+				),
+			);
+		} elseif ( 'subtle_tilt_ambiguity' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array( (string) ( $issue['selector'] ?? '' ) ),
+				'problem'      => 'A rotated element is tilted so slightly that it risks reading as accidental rather than intentional.',
+				'fixes'        => array(
+					'Either remove the rotation and let the element sit cleanly, or increase the angle enough that the gesture is clearly willed.',
+					'Keep slight playful tilts for secondary notes or ephemera, not for major content modules that need to feel anchored.',
+					'When in doubt, compare the module straight versus clearly tilted. The ambiguous middle usually loses.',
+				),
+			);
+		} elseif ( 'alignfull_breakout_risk' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values( array_map( 'strval', is_array( $issue['selectors'] ?? null ) ? $issue['selectors'] : array() ) ),
+				'problem'      => 'Alignfull blocks are layered on top of shell-level full-width CSS.',
+				'fixes'        => array(
+					'Neutralize alignfull margins if the shell already spans the full viewport.',
+					'Choose one breakout system: either theme-shell full width or Gutenberg breakout margins, not both.',
+					'Test on desktop widths first because sideways bleed usually shows there before mobile.',
+				),
+			);
+		} elseif ( 'button_contrast_risk' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array( (string) ( $issue['selector'] ?? '' ) ),
+				'problem'      => 'The CTA looks disabled or hard to read because button text and fill are too close in value.',
+				'fixes'        => array(
+					'Darken the button fill or lighten the text so the action reads instantly.',
+					'Keep button contrast comfortably strong instead of aiming for a subtle “luxury” tone that becomes weak.',
+					'If the button sits inside a soft card, give it enough visual weight to separate from the surrounding paper tone.',
+				),
+			);
+		} elseif ( 'trailing_content_gap_risk' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array( (string) ( $issue['selector'] ?? '' ) ),
+				'problem'      => 'Bottom padding on the main content wrapper can leave visible blank space after the last section.',
+				'fixes'        => array(
+					'Move end-spacing onto the final section itself if the transition is intentional.',
+					'Remove wrapper-level bottom padding when the footer is hidden or minimal.',
+					'Check the document bottom after hiding theme chrome, because shell padding often becomes visible only then.',
+				),
+			);
+		} elseif ( 'design_token_sprawl' === $type ) {
+			if ( in_array( $type, $added_types, true ) ) {
+				continue;
+			}
+
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array(),
+				'problem'      => 'The page keeps introducing new visual tokens for the same design language.',
+				'fixes'        => array(
+					'Collapse radii into a smaller set, for example one small card radius and one large panel radius.',
+					'Limit shadows to a couple of elevation levels instead of inventing a new shadow for every section.',
+					'Let hierarchy come from composition and contrast, not from endlessly multiplying decorative token values.',
+				),
+			);
+			$added_types[] = $type;
+		} elseif ( 'card_monotony_risk' === $type ) {
+			$suggestions[] = array(
+				'type'         => $type,
+				'selectors'    => array_values( array_map( 'strval', is_array( $issue['selectors'] ?? null ) ? $issue['selectors'] : array() ) ),
+				'problem'      => 'Too many sections are enclosed in similar card treatments, which makes the page feel templated and repetitive.',
+				'fixes'        => array(
+					'Flatten some sections so they live directly on the page background instead of inside another rounded box.',
+					'Use a mix of open text bands, dividers, full-bleed sections, and only a few true cards.',
+					'Reserve the boxed treatment for moments that actually need containment, such as notes, quotes, or operational modules.',
+				),
+			);
+		}
+	}
+
+	return array(
+		'score'           => (int) ( $evaluation['score'] ?? 0 ),
+		'issue_count'     => (int) ( $evaluation['issue_count'] ?? 0 ),
+		'passes'          => (bool) ( $evaluation['passes'] ?? false ),
+		'blocking_issue_count' => (int) ( $evaluation['blocking_issue_count'] ?? 0 ),
+		'blocking_issue_types' => array_values( array_map( 'strval', is_array( $evaluation['blocking_issue_types'] ?? null ) ? $evaluation['blocking_issue_types'] : array() ) ),
+		'issues'          => $issues,
+		'suggestions'     => $suggestions,
+		'summary'         => $evaluation['summary'] ?? array(),
 	);
 }
 
@@ -3629,6 +6732,215 @@ function mcp_abilities_gutenberg_get_section_recipes(): array {
 }
 
 /**
+ * Return reusable query-section recipes.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_get_query_section_recipes(): array {
+	return array(
+		array(
+			'slug'        => 'post-grid',
+			'label'       => 'Post Grid',
+			'description' => 'Responsive card grid with featured image, title, excerpt, and read-more link.',
+			'blocks'      => array( 'core/group', 'core/query', 'core/post-template', 'core/post-featured-image', 'core/post-title', 'core/post-excerpt', 'core/read-more' ),
+		),
+		array(
+			'slug'        => 'compact-list',
+			'label'       => 'Compact List',
+			'description' => 'Tighter editorial list with title, date, excerpt, and read-more.',
+			'blocks'      => array( 'core/group', 'core/query', 'core/post-template', 'core/post-title', 'core/post-date', 'core/post-excerpt', 'core/read-more' ),
+		),
+		array(
+			'slug'        => 'magazine',
+			'label'       => 'Magazine',
+			'description' => 'Editorial two-column cards with image-led story blocks and metadata.',
+			'blocks'      => array( 'core/group', 'core/query', 'core/post-template', 'core/post-featured-image', 'core/post-terms', 'core/post-title', 'core/post-date', 'core/post-excerpt' ),
+		),
+	);
+}
+
+/**
+ * Build sanitized query-loop attrs.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_build_query_attributes( array $input ): array {
+	$per_page = isset( $input['per_page'] ) ? max( 1, min( 12, (int) $input['per_page'] ) ) : 6;
+	$post_type = isset( $input['post_type'] ) ? sanitize_key( (string) $input['post_type'] ) : 'post';
+	$order = isset( $input['order'] ) ? strtoupper( (string) $input['order'] ) : 'DESC';
+	$order = in_array( $order, array( 'ASC', 'DESC' ), true ) ? $order : 'DESC';
+	$order_by = isset( $input['order_by'] ) ? sanitize_key( (string) $input['order_by'] ) : 'date';
+	$allowed_order_by = array( 'date', 'title', 'modified', 'menu_order', 'rand' );
+	if ( ! in_array( $order_by, $allowed_order_by, true ) ) {
+		$order_by = 'date';
+	}
+
+	$query = array(
+		'perPage'  => $per_page,
+		'pages'    => 0,
+		'offset'   => 0,
+		'postType' => $post_type,
+		'order'    => strtolower( $order ),
+		'orderBy'  => $order_by,
+		'inherit'  => false,
+	);
+
+	if ( isset( $input['offset'] ) ) {
+		$query['offset'] = max( 0, (int) $input['offset'] );
+	}
+	if ( isset( $input['search'] ) && '' !== trim( (string) $input['search'] ) ) {
+		$query['search'] = trim( (string) $input['search'] );
+	}
+	if ( isset( $input['author'] ) ) {
+		$query['author'] = max( 0, (int) $input['author'] );
+	}
+	if ( isset( $input['category_ids'] ) && is_array( $input['category_ids'] ) ) {
+		$query['categoryIds'] = array_values(
+			array_filter(
+				array_map( 'intval', $input['category_ids'] ),
+				static function ( int $id ): bool {
+					return $id > 0;
+				}
+			)
+		);
+	}
+	if ( isset( $input['tag_ids'] ) && is_array( $input['tag_ids'] ) ) {
+		$query['tagIds'] = array_values(
+			array_filter(
+				array_map( 'intval', $input['tag_ids'] ),
+				static function ( int $id ): bool {
+					return $id > 0;
+				}
+			)
+		);
+	}
+
+	return array(
+		'queryId' => wp_rand( 1, 999 ),
+		'query'   => $query,
+	);
+}
+
+/**
+ * Generate a reusable query section payload.
+ *
+ * @param array<string,mixed> $input Input data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_abilities_gutenberg_generate_query_section_payload( array $input ) {
+	$recipe = isset( $input['recipe'] ) ? sanitize_key( (string) $input['recipe'] ) : 'post-grid';
+	$title  = isset( $input['title'] ) ? trim( (string) $input['title'] ) : 'Latest Stories';
+	$intro  = isset( $input['intro'] ) ? trim( (string) $input['intro'] ) : 'A dynamic Gutenberg section that keeps the page fresh as new content is published.';
+	$empty  = isset( $input['empty_message'] ) ? trim( (string) $input['empty_message'] ) : 'Nothing has been published here yet.';
+	$query_attrs = mcp_abilities_gutenberg_build_query_attributes( $input );
+	$content = '';
+
+	switch ( $recipe ) {
+		case 'post-grid':
+			$query_block_attrs = array_merge(
+				$query_attrs,
+				array(
+					'displayLayout' => array(
+						'type'    => 'flex',
+						'columns' => isset( $input['columns'] ) ? max( 2, min( 4, (int) $input['columns'] ) ) : 3,
+					),
+					'layout'        => array( 'type' => 'constrained' ),
+				)
+			);
+			$content = '<!-- wp:group {"layout":{"type":"constrained"},"style":{"spacing":{"blockGap":"1.25rem"}}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. mcp_abilities_gutenberg_paragraph_block( $intro )
+				. '<!-- wp:query ' . wp_json_encode( $query_block_attrs ) . ' --><div class="wp-block-query">'
+				. '<!-- wp:post-template {"layout":{"type":"grid","columnCount":' . (int) $query_block_attrs['displayLayout']['columns'] . '}} -->'
+				. '<!-- wp:group {"style":{"spacing":{"blockGap":"0.9rem","padding":{"top":"1.1rem","right":"1.1rem","bottom":"1.1rem","left":"1.1rem"}},"border":{"radius":"18px"}},"backgroundColor":"base-2","layout":{"type":"constrained"}} --><div class="wp-block-group has-base-2-background-color has-background" style="border-radius:18px;padding-top:1.1rem;padding-right:1.1rem;padding-bottom:1.1rem;padding-left:1.1rem">'
+				. '<!-- wp:post-featured-image {"isLink":true,"aspectRatio":"4/3","style":{"border":{"radius":"14px"}}} /-->'
+				. '<!-- wp:post-title {"level":3,"isLink":true} /-->'
+				. '<!-- wp:post-excerpt {"moreText":"Continue reading"} /-->'
+				. '<!-- wp:read-more {"content":"Read story"} /-->'
+				. '</div><!-- /wp:group -->'
+				. '<!-- /wp:post-template -->'
+				. '<!-- wp:query-no-results --><div class="wp-block-query-no-results">'
+				. mcp_abilities_gutenberg_paragraph_block( $empty )
+				. '</div><!-- /wp:query-no-results -->'
+				. '</div><!-- /wp:query -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'compact-list':
+			$query_block_attrs = array_merge(
+				$query_attrs,
+				array(
+					'displayLayout' => array( 'type' => 'list' ),
+					'layout'        => array( 'type' => 'constrained' ),
+				)
+			);
+			$content = '<!-- wp:group {"layout":{"type":"constrained"},"style":{"spacing":{"blockGap":"1rem"}}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. mcp_abilities_gutenberg_paragraph_block( $intro )
+				. '<!-- wp:query ' . wp_json_encode( $query_block_attrs ) . ' --><div class="wp-block-query">'
+				. '<!-- wp:post-template {"layout":{"type":"default"}} -->'
+				. '<!-- wp:group {"style":{"spacing":{"blockGap":"0.6rem","padding":{"top":"0.9rem","bottom":"0.9rem"}},"border":{"bottom":{"color":"var:preset|color|contrast-3","width":"1px"}}},"layout":{"type":"constrained"}} --><div class="wp-block-group" style="border-bottom-color:var(--wp--preset--color--contrast-3);border-bottom-width:1px;padding-top:0.9rem;padding-bottom:0.9rem">'
+				. '<!-- wp:post-title {"level":3,"isLink":true} /-->'
+				. '<!-- wp:post-date /-->'
+				. '<!-- wp:post-excerpt {"moreText":"Continue reading"} /-->'
+				. '<!-- wp:read-more {"content":"Open"} /-->'
+				. '</div><!-- /wp:group -->'
+				. '<!-- /wp:post-template -->'
+				. '<!-- wp:query-no-results --><div class="wp-block-query-no-results">'
+				. mcp_abilities_gutenberg_paragraph_block( $empty )
+				. '</div><!-- /wp:query-no-results -->'
+				. '</div><!-- /wp:query -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		case 'magazine':
+			$query_block_attrs = array_merge(
+				$query_attrs,
+				array(
+					'displayLayout' => array(
+						'type'    => 'flex',
+						'columns' => 2,
+					),
+					'layout'        => array( 'type' => 'constrained' ),
+				)
+			);
+			$content = '<!-- wp:group {"layout":{"type":"constrained"},"style":{"spacing":{"blockGap":"1.4rem"}}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_heading_block( $title, 2 )
+				. mcp_abilities_gutenberg_paragraph_block( $intro )
+				. '<!-- wp:query ' . wp_json_encode( $query_block_attrs ) . ' --><div class="wp-block-query">'
+				. '<!-- wp:post-template {"layout":{"type":"grid","columnCount":2}} -->'
+				. '<!-- wp:columns {"verticalAlignment":"top","style":{"spacing":{"blockGap":"1.2rem","padding":{"top":"1rem","bottom":"1rem"}},"border":{"bottom":{"color":"var:preset|color|contrast-3","width":"1px"}}}} --><div class="wp-block-columns are-vertically-aligned-top" style="border-bottom-color:var(--wp--preset--color--contrast-3);border-bottom-width:1px;padding-top:1rem;padding-bottom:1rem">'
+				. '<!-- wp:column {"verticalAlignment":"top","width":"40%"} --><div class="wp-block-column is-vertically-aligned-top" style="flex-basis:40%"><!-- wp:post-featured-image {"isLink":true,"aspectRatio":"3/2","style":{"border":{"radius":"16px"}}} /--></div><!-- /wp:column -->'
+				. '<!-- wp:column {"verticalAlignment":"top","width":"60%"} --><div class="wp-block-column is-vertically-aligned-top" style="flex-basis:60%">'
+				. '<!-- wp:post-terms {"term":"category"} /-->'
+				. '<!-- wp:post-title {"level":3,"isLink":true} /-->'
+				. '<!-- wp:post-date /-->'
+				. '<!-- wp:post-excerpt {"moreText":"Continue reading"} /-->'
+				. '</div><!-- /wp:column -->'
+				. '</div><!-- /wp:columns -->'
+				. '<!-- /wp:post-template -->'
+				. '<!-- wp:query-no-results --><div class="wp-block-query-no-results">'
+				. mcp_abilities_gutenberg_paragraph_block( $empty )
+				. '</div><!-- /wp:query-no-results -->'
+				. '</div><!-- /wp:query -->'
+				. '</div><!-- /wp:group -->';
+			break;
+
+		default:
+			return new WP_Error( 'mcp_gutenberg_unknown_query_recipe', 'Unknown query section recipe.' );
+	}
+
+	return array(
+		'recipe'  => $recipe,
+		'content' => $content,
+		'summary' => mcp_abilities_gutenberg_content_summary( $content ),
+		'blocks'  => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) ),
+		'query'   => $query_attrs['query'],
+	);
+}
+
+/**
  * Generate a reusable section payload.
  *
  * @param array<string,mixed> $input Input data.
@@ -3793,6 +7105,7 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	}
 
 	$all_block_names = mcp_abilities_gutenberg_collect_block_names( $normalized );
+	$layout_risks    = mcp_abilities_gutenberg_collect_content_layout_risks( $content );
 	$markup_bearing_block_names = array();
 	$comment_only_block_names   = array();
 	$walk_blocks                = static function ( array $blocks ) use ( &$walk_blocks, &$markup_bearing_block_names, &$comment_only_block_names ): void {
@@ -3836,6 +7149,34 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	if ( ! empty( $markup_bearing_block_names ) ) {
 		$warnings[] = 'Markup-bearing blocks are present; attr-only mutations may require saved markup regeneration to affect frontend rendering.';
 	}
+	if ( ! empty( $layout_risks['issues'] ) ) {
+		$issue_types = array_values(
+			array_unique(
+				array_map(
+					static function ( array $issue ): string {
+						return (string) ( $issue['type'] ?? '' );
+					},
+					$layout_risks['issues']
+				)
+			)
+		);
+		$warnings[] = 'Layout-risk styles detected in content: ' . implode( ', ', $issue_types ) . '.';
+	}
+	if ( ! empty( $layout_risks['content_measures'] ) ) {
+		$measure_values = array_values(
+			array_unique(
+				array_map(
+					static function ( array $measure ): string {
+						return (string) ( $measure['value'] ?? '' );
+					},
+					$layout_risks['content_measures']
+				)
+			)
+		);
+		if ( count( $measure_values ) > 1 ) {
+			$warnings[] = 'Multiple fixed content measures detected in embedded Gutenberg styling: ' . implode( ', ', array_slice( $measure_values, 0, 6 ) ) . '. Interior sections usually need one primary width rhythm.';
+		}
+	}
 
 	return array(
 		'summary'                 => mcp_abilities_gutenberg_content_summary( $content ),
@@ -3846,6 +7187,14 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 		'top_level_block_names'   => $top_level_names,
 		'top_level_block_count'   => count( $normalized ),
 		'warnings'                => $warnings,
+		'layout_risks'            => array(
+			'issue_count'               => count( $layout_risks['issues'] ),
+			'embedded_style_block_count'=> (int) $layout_risks['embedded_style_block_count'],
+			'inline_style_count'        => (int) $layout_risks['inline_style_count'],
+			'shell_full_width_css_detected' => ! empty( $layout_risks['shell_full_width_css_detected'] ),
+			'content_measures'          => $layout_risks['content_measures'],
+			'issues'                    => $layout_risks['issues'],
+		),
 		'mutation_guardrails'     => array(
 			'static_attr_changes_require_markup_regeneration' => ! empty( $markup_bearing_block_names ),
 			'editor_only_attr_paths'                          => array( 'lock', 'templateLock', 'allowedBlocks', 'metadata' ),
@@ -4155,6 +7504,14 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 		);
 	}
 
+	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
+	if ( is_wp_error( $layout_guard ) ) {
+		return array(
+			'success' => false,
+			'message' => $layout_guard->get_error_message(),
+		);
+	}
+
 	$title = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : 'Untitled Page';
 	$slug  = isset( $input['slug'] ) ? sanitize_title( (string) $input['slug'] ) : sanitize_title( $title );
 	$status = isset( $input['status'] ) ? sanitize_text_field( (string) $input['status'] ) : 'draft';
@@ -4319,6 +7676,14 @@ function mcp_abilities_gutenberg_insert_pattern_into_post( array $input ): array
 		$content = $pattern_content;
 	} else {
 		$content = $existing_content . "\n\n" . $pattern_content;
+	}
+
+	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
+	if ( is_wp_error( $layout_guard ) ) {
+		return array(
+			'success' => false,
+			'message' => $layout_guard->get_error_message(),
+		);
 	}
 
 	$result = wp_update_post(
@@ -5085,6 +8450,41 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 	);
 
 	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/get-query-section-recipes',
+		array(
+			'label'               => 'Get Gutenberg Query Section Recipes',
+			'description'         => 'Return reusable dynamic query-section recipes such as post-grid, compact-list, and magazine.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => new stdClass(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'recipes' => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function (): array {
+				return array(
+					'success' => true,
+					'recipes' => mcp_abilities_gutenberg_get_query_section_recipes(),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/generate-landing-page',
 		array(
 			'label'               => 'Generate Landing Page Blocks',
@@ -5235,6 +8635,112 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 	);
 
 	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/generate-query-section',
+		array(
+			'label'               => 'Generate Gutenberg Query Section',
+			'description'         => 'Generate a dynamic Gutenberg query section such as a post-grid, compact-list, or magazine feed.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'required'   => array( 'recipe' ),
+				'properties' => array(
+					'recipe' => array(
+						'type'        => 'string',
+						'enum'        => array( 'post-grid', 'compact-list', 'magazine' ),
+						'description' => 'Dynamic query-section recipe to generate.',
+					),
+					'title' => array(
+						'type'        => 'string',
+						'description' => 'Section heading.',
+					),
+					'intro' => array(
+						'type'        => 'string',
+						'description' => 'Optional intro text above the query block.',
+					),
+					'empty_message' => array(
+						'type'        => 'string',
+						'description' => 'Message to show when the query has no results.',
+					),
+					'post_type' => array(
+						'type'        => 'string',
+						'description' => 'Target post type, for example post or page.',
+					),
+					'per_page' => array(
+						'type'        => 'integer',
+						'description' => 'Number of posts to show.',
+					),
+					'columns' => array(
+						'type'        => 'integer',
+						'description' => 'Grid columns for the post-grid recipe.',
+					),
+					'order' => array(
+						'type'        => 'string',
+						'description' => 'ASC or DESC.',
+					),
+					'order_by' => array(
+						'type'        => 'string',
+						'description' => 'date, title, modified, menu_order, or rand.',
+					),
+					'offset' => array(
+						'type'        => 'integer',
+						'description' => 'Optional query offset.',
+					),
+					'search' => array(
+						'type'        => 'string',
+						'description' => 'Optional search term for the query.',
+					),
+					'author' => array(
+						'type'        => 'integer',
+						'description' => 'Optional author ID filter.',
+					),
+					'category_ids' => array(
+						'type'        => 'array',
+						'description' => 'Optional category term IDs to filter by.',
+						'items'       => array( 'type' => 'integer' ),
+					),
+					'tag_ids' => array(
+						'type'        => 'array',
+						'description' => 'Optional tag term IDs to filter by.',
+						'items'       => array( 'type' => 'integer' ),
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'recipe'  => array( 'type' => 'string' ),
+					'query'   => array( 'type' => 'object' ),
+					'content' => array( 'type' => 'string' ),
+					'summary' => array( 'type' => 'object' ),
+					'blocks'  => array( 'type' => 'array' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$result = mcp_abilities_gutenberg_generate_query_section_payload( is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $result ) ) {
+					return array(
+						'success' => false,
+						'message' => $result->get_error_message(),
+					);
+				}
+
+				return array_merge( array( 'success' => true ), $result );
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
 		'gutenberg/validate-content',
 		array(
 			'label'               => 'Validate Gutenberg Content',
@@ -5349,6 +8855,134 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				return array(
 					'success' => true,
 					'audit'   => mcp_abilities_gutenberg_audit_content( $content ),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/evaluate-design',
+		array(
+			'label'               => 'Evaluate Gutenberg Design',
+			'description'         => 'Evaluate Gutenberg design coherence and flag width-rhythm drift, sibling-treatment mismatches, and risky full-width breakout combinations.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'content' => array(
+						'type'        => 'string',
+						'description' => 'Raw Gutenberg content to evaluate.',
+					),
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Optional post ID to evaluate when content is omitted.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'    => array( 'type' => 'boolean' ),
+					'evaluation' => array( 'type' => 'object' ),
+					'message'    => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$content = '';
+				if ( isset( $input['content'] ) && is_string( $input['content'] ) ) {
+					$content = $input['content'];
+				} elseif ( isset( $input['post_id'] ) ) {
+					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
+					if ( is_wp_error( $post ) ) {
+						return array(
+							'success' => false,
+							'message' => $post->get_error_message(),
+						);
+					}
+					$content = (string) $post->post_content;
+				} else {
+					return array(
+						'success' => false,
+						'message' => 'Provide content or post_id.',
+					);
+				}
+
+				return array(
+					'success'    => true,
+					'evaluation' => mcp_abilities_gutenberg_evaluate_design( $content ),
+				);
+			},
+			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	mcp_abilities_gutenberg_register_ability(
+		'gutenberg/suggest-design-fixes',
+		array(
+			'label'               => 'Suggest Gutenberg Design Fixes',
+			'description'         => 'Return concrete design-fix suggestions for width-rhythm drift, sibling-treatment mismatches, weak button contrast, trailing gaps, and risky full-width breakouts.',
+			'category'            => 'block-editor',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'content' => array(
+						'type'        => 'string',
+						'description' => 'Raw Gutenberg content to inspect.',
+					),
+					'post_id' => array(
+						'type'        => 'integer',
+						'description' => 'Optional post ID to inspect when content is omitted.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'     => array( 'type' => 'boolean' ),
+					'suggestions' => array( 'type' => 'object' ),
+					'message'     => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$content = '';
+				if ( isset( $input['content'] ) && is_string( $input['content'] ) ) {
+					$content = $input['content'];
+				} elseif ( isset( $input['post_id'] ) ) {
+					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
+					if ( is_wp_error( $post ) ) {
+						return array(
+							'success' => false,
+							'message' => $post->get_error_message(),
+						);
+					}
+					$content = (string) $post->post_content;
+				} else {
+					return array(
+						'success' => false,
+						'message' => 'Provide content or post_id.',
+					);
+				}
+
+				return array(
+					'success'     => true,
+					'suggestions' => mcp_abilities_gutenberg_suggest_design_fixes( $content ),
 				);
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
@@ -7807,6 +11441,14 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					return array(
 						'success' => false,
 						'message' => 'Provide either content or blocks.',
+					);
+				}
+
+				$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
+				if ( is_wp_error( $layout_guard ) ) {
+					return array(
+						'success' => false,
+						'message' => $layout_guard->get_error_message(),
 					);
 				}
 

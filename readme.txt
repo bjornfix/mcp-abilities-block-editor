@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.13.0
+Stable tag: 0.19.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,10 +32,14 @@ Included abilities:
 - `gutenberg/block-guidance`
 - `gutenberg/get-page-recipes`
 - `gutenberg/get-section-recipes`
+- `gutenberg/get-query-section-recipes`
 - `gutenberg/generate-landing-page`
 - `gutenberg/generate-section`
+- `gutenberg/generate-query-section`
 - `gutenberg/validate-content`
 - `gutenberg/audit-content`
+- `gutenberg/evaluate-design`
+- `gutenberg/suggest-design-fixes`
 - `gutenberg/evaluate-copy`
 - `gutenberg/suggest-copy-fixes`
 - `gutenberg/analyze-content`
@@ -91,10 +95,10 @@ This is useful when an MCP client needs to:
 - inspect block style variations and style-relevant theme support
 - discover and reuse registered patterns and synced patterns
 - choose the right Gutenberg block for a content scenario
-- generate reusable sections like hero, FAQ, CTA, testimonial, stats rows, pricing, team, timeline, gallery, and contact-map layouts
+- generate reusable sections like hero, FAQ, CTA, testimonial, stats rows, pricing, team, timeline, gallery, contact-map, and dynamic query-loop layouts
 - generate a structured landing page from business inputs
-- validate round-trip safety, page structure, outline, link/media usage, Gutenberg-specific QA issues, copy quality, and static-block mutation risks
-- evaluate rendered page chrome around Gutenberg content for wrapper-induced layout issues
+- validate round-trip safety, page structure, outline, link/media usage, Gutenberg-specific QA issues, copy quality, static-block mutation risks, and layout-risk styles before saving
+- evaluate rendered page chrome around Gutenberg content for wrapper-induced layout issues plus overlap and scroll-risk smells from embedded CSS and inline style attributes
 - turn weak copy findings into block-level rewrite suggestions
 - inspect Gutenberg content as nested blocks
 - preserve block formatting and attributes
@@ -130,6 +134,80 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.19.6 =
+* Added `noninteractive_control_affordance_risk` so `gutenberg/evaluate-design` can flag inert labels or proof chips that are styled like clickable controls.
+* Expanded block guidance and design-fix suggestions so AI clients keep non-clickable metadata visually quieter than real CTAs.
+
+= 0.19.5 =
+* Expanded `internal_measure_mismatch` so `gutenberg/evaluate-design` now catches nested Gutenberg container rows that quietly stay on a narrower usable measure inside a widened section, not just narrow text caps.
+* Expanded design-fix guidance so AI clients are nudged to remove stacked width constraints such as default-sized `.wp-block-columns` rows inside a wider shell.
+
+= 0.19.4 =
+* Expanded block guidance and design-fix suggestions for editorial split layouts so AI clients are nudged to center visibly shorter support columns and use full-height structural dividers instead of short borders on nested text wrappers.
+
+= 0.19.3 =
+* Expanded `gutenberg/evaluate-design` with `internal_measure_mismatch` so widened sections can still be flagged when their inner quote or text measure stays artificially narrow.
+* Added `subtle_tilt_ambiguity` so small decorative rotations that read like mistakes can be surfaced before publish.
+* Added `repeated_object_treatment_inconsistency` so repeated sibling modules are flagged when matching objects receive different containment treatments.
+
+= 0.19.1 =
+* Made `evaluate-render-context` and other editable-post helpers work reliably from WP-CLI validation runs by binding to the first administrator when CLI is running without a current user.
+
+= 0.19.0 =
+* Added `spacing_rhythm_drift` so the design layer can flag pages whose top-level Gutenberg sections use too many unrelated spacer heights, paddings, or margins.
+* Expanded block guidance with vertical-rhythm advice so AI clients are nudged toward a smaller spacing token set instead of improvising every section gap.
+
+= 0.18.9 =
+* Added `row_treatment_inconsistency` so the design layer can catch repeated rows where one sibling becomes a stray boxed/card-like module while the others stay open.
+* Expanded block guidance with row-coherence advice so AI clients are told to keep repeated columns in one treatment family unless a spotlight item is clearly intentional.
+
+= 0.18.8 =
+* Tightened `card_monotony_risk` so the design layer can flag page-wide overuse of boxed section treatments, not just isolated card selectors.
+* The design evaluator now looks at repeated boxed section families and component spread, which better catches the "everything became cards" failure mode common in AI-generated layouts.
+
+= 0.17.0 =
+- Expanded hard-fail layout guardrails to also block aggressive translate offsets and absolute/fixed overlay positioning patterns.
+
+= 0.18.7 =
+* Added `card_monotony_risk` so the design layer can flag when too many sections fall back to the same rounded-box/card treatment.
+
+= 0.18.6 =
+* Expanded the design layer to flag design-token sprawl when a page uses too many different border-radius or shadow treatments across its Gutenberg styling.
+
+= 0.18.5 =
+* Added `gutenberg/suggest-design-fixes` so design issues now come back with concrete remediation guidance instead of only scores and warnings.
+
+= 0.18.4 =
+* Expanded `gutenberg/evaluate-design` to flag weak button contrast and trailing bottom-gap styling on main content wrappers.
+* Extended embedded CSS analysis so nearly invisible CTA treatments and stray bottom padding can be surfaced as design-coherence issues before publishing.
+
+= 0.18.3 =
+* Added `gutenberg/evaluate-design` so the plugin can score design coherence and flag repeated-row treatment mismatches, width-rhythm drift, and risky full-width breakout combinations.
+* Added sibling-treatment CSS heuristics so rows where only some cards/columns receive accent styling can be identified before the page feels unfinished.
+
+= 0.18.2 =
+* Added width-system analysis so `gutenberg/validate-content` and `gutenberg/evaluate-render-context` can warn when embedded Gutenberg styling defines multiple conflicting fixed content measures across major sections.
+* Added content-level `alignfull_breakout_risk` detection and now block writes when embedded Gutenberg styling mixes `alignfull` blocks with shell-level full-width CSS, a pattern that can produce sideways scrolling.
+* Expanded block guidance with explicit advice for keeping one coherent interior content width across multi-section page builds.
+
+= 0.18.1 =
+* Added `alignfull_breakout_risk` detection to `gutenberg/evaluate-render-context` so the plugin can warn when `alignfull` Gutenberg blocks are combined with CSS that already forces the page shell to full width, a pattern that can produce sideways scrolling.
+
+= 0.18.0 =
+- Added dynamic query-section recipes and generation for `core/query`-based post grids, compact lists, and magazine-style content feeds.
+
+= 0.16.0 =
+- Added hard-fail write guardrails for high-confidence layout-risk styles so unsafe content is blocked before save.
+- Extended `validate-content` to report layout-risk styles found in content.
+
+= 0.15.0 =
+- Expanded render-context evaluation to scan inline `style` attributes inside rendered content, not just embedded `<style>` blocks.
+- Kept the layout-risk checks focused on overlap, overflow, scroll-region, and large offset smells.
+
+= 0.14.0 =
+- Extended rendered-page context evaluation so it recognizes `.page-content` shells like Hello Elementor.
+- Added embedded CSS layout-risk checks for negative-margin overlap, explicit scroll regions, and viewport-width overflow smells.
 
 = 0.13.0 =
 - Added rendered-page context evaluation so wrapper-level layout issues around Gutenberg content can be detected from the live page.
