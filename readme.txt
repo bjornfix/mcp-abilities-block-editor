@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.20.2
+Stable tag: 0.20.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,9 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.3 =
+* Fix support-row cramp evaluation so distinct Gutenberg rows no longer collapse into one generic selector; process rows, proof strips, and other repeated support modules are now reported separately.
 
 = 0.20.2 =
 * Add `support_module_cramp_risk` so the design evaluator can fail process rows, proof strips, and benefit rows that still feel too narrow because too many text-bearing modules are packed into one horizontal lane.

@@ -163,6 +163,10 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.20.3
+
+- Fix support-row cramp evaluation so distinct Gutenberg rows no longer collapse into one generic selector; process rows, proof strips, and other repeated support modules are now reported separately.
+
 ### 0.20.2
 
 - Add `support_module_cramp_risk` so the evaluator can flag process rows, proof strips, and similar support modules that still feel too narrow because too many text-bearing items are forced into one line.

@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.2
+ * Version: 0.20.3
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -4692,7 +4692,8 @@ function mcp_abilities_gutenberg_collect_rendered_support_module_cramp_issues( s
 		}
 
 		$row_selector = mcp_abilities_gutenberg_describe_dom_element( $row );
-		if ( isset( $seen[ $row_selector ] ) ) {
+		$row_key      = $row_selector . '|' . md5( trim( preg_replace( '/\s+/u', ' ', (string) $row->textContent ) ) );
+		if ( isset( $seen[ $row_key ] ) ) {
 			continue;
 		}
 
@@ -4780,7 +4781,7 @@ function mcp_abilities_gutenberg_collect_rendered_support_module_cramp_issues( s
 			continue;
 		}
 
-		$seen[ $row_selector ] = true;
+		$seen[ $row_key ] = true;
 		$issues[] = array(
 			'type'              => 'support_module_cramp_risk',
 			'severity'          => 'notice',
