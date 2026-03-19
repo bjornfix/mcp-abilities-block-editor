@@ -163,6 +163,11 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.20.7
+
+- Refine `support_module_cramp_risk` so clearly stacked/list-based proof groups are not treated like cramped horizontal strips.
+- Reinforce the calmer vertical proof-list fallback when support copy is too substantial for equal-width strip modules.
+
 ### 0.20.6
 
 - Tighten `alignfull_breakout_risk` so custom page-level width systems with multiple `alignfull` sections now fail unless the content explicitly neutralizes Gutenberg breakout margins.

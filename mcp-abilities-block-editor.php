@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.6
+ * Version: 0.20.7
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -2643,6 +2643,33 @@ function mcp_abilities_gutenberg_count_words( string $text ): int {
 }
 
 /**
+ * Determine whether a class string reads like a stacked/list treatment token.
+ *
+ * @param string $class_name Raw class string.
+ * @param array<int,string> $tokens Tokens to test.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_class_has_layout_token( string $class_name, array $tokens ): bool {
+	$class_name = strtolower( trim( $class_name ) );
+	if ( '' === $class_name ) {
+		return false;
+	}
+
+	foreach ( $tokens as $token ) {
+		$token = strtolower( trim( $token ) );
+		if ( '' === $token ) {
+			continue;
+		}
+
+		if ( preg_match( '/(?:^|[\s_-])' . preg_quote( $token, '/' ) . '(?:$|[\s_-])/', $class_name ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
  * Extract layout-risk issues from CSS text.
  *
  * @param string $css CSS to inspect.
@@ -4905,6 +4932,12 @@ function mcp_abilities_gutenberg_collect_rendered_support_module_cramp_issues( s
 		$children = array();
 		$row_class = ' ' . strtolower( trim( (string) $row->getAttribute( 'class' ) ) ) . ' ';
 		$is_columns_row = false !== strpos( $row_class, ' wp-block-columns ' );
+		$has_stack_token = mcp_abilities_gutenberg_class_has_layout_token( $row_class, array( 'list', 'stack' ) );
+		$has_horizontal_token = mcp_abilities_gutenberg_class_has_layout_token( $row_class, array( 'row', 'grid', 'columns', 'items', 'strip', 'process' ) );
+
+		if ( ! $is_columns_row && $has_stack_token && ! $has_horizontal_token ) {
+			continue;
+		}
 
 		foreach ( $row->childNodes as $child_node ) {
 			if ( ! $child_node instanceof DOMElement ) {

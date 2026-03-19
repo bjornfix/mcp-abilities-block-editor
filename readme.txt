@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.20.6
+Stable tag: 0.20.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,11 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.7 =
+
+* Refined `support_module_cramp_risk` so clearly stacked/list-based proof groups are not treated like cramped horizontal strips.
+* Added guidance for calmer vertical proof-list patterns when support copy is too substantial for equal-width strip modules.
 
 = 0.20.6 =
 * Tighten `alignfull_breakout_risk` so custom page-level width systems with multiple `alignfull` sections now fail unless the content explicitly neutralizes Gutenberg breakout margins.
