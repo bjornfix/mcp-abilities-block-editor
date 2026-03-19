@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.3
+ * Version: 0.20.4
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -468,6 +468,14 @@ function mcp_abilities_gutenberg_block_guidance_catalog(): array {
 			'notes'        => 'Treat the proof row as part of the same selling moment. Keep the transition compact, and only use a larger gap when the support row has a clearly separate surface or section identity.',
 		),
 		array(
+			'scenario'     => 'Proof points with a short label and a supporting explanation',
+			'best_block'   => 'core/columns',
+			'alternatives' => array( 'core/group', 'core/list' ),
+			'use_when'     => 'Use when each proof point carries two layers: a short headline-like label plus one helpful supporting sentence.',
+			'avoid_when'   => 'Avoid squeezing label-plus-explanation proof into chip rails, inline metadata strings, or fake one-line pills.',
+			'notes'        => 'If each proof point says something real, give it a calm vertical stack: label first, explanation below. Treat it like an open proof list, not like compressed metadata.',
+		),
+		array(
 			'scenario'     => 'Adjacent full-width sections that should visually touch',
 			'best_block'   => 'core/group',
 			'alternatives' => array( 'core/cover', 'core/group' ),
@@ -578,6 +586,14 @@ function mcp_abilities_gutenberg_block_guidance_catalog(): array {
 			'use_when'     => 'Use when semantics or rendering rely on a specific block from a plugin or theme.',
 			'avoid_when'   => 'Avoid recreating complex plugin output with plain paragraphs and headings.',
 			'notes'        => 'If a feature has its own block, prefer that over manual imitation.',
+		),
+		array(
+			'scenario'     => 'Visually designed FAQ section that still needs machine-readable schema',
+			'best_block'   => 'Keep the visual FAQ layout and add matching FAQ schema underneath it',
+			'alternatives' => array( 'Use the plugin or custom block that owns FAQ output', 'core/group' ),
+			'use_when'     => 'Use when the FAQ design works visually, but you still need real FAQ semantics for schema or search features.',
+			'avoid_when'   => 'Avoid flattening a good visual FAQ into plain plugin markup just to get schema, and avoid leaving a real FAQ section as headings-only content with no machine-readable structure.',
+			'notes'        => 'Treat visual FAQ design and FAQ schema as two layers of the same feature. Preserve the layout if it works, then add matching JSON-LD or the owning plugin block underneath.',
 		),
 	);
 }
@@ -2582,6 +2598,7 @@ function mcp_abilities_gutenberg_is_blocking_design_issue( string $type ): bool 
 			'internal_measure_mismatch',
 			'support_module_cramp_risk',
 			'followup_cluster_detachment_risk',
+			'faq_schema_missing_risk',
 			'fullwidth_section_seam_gap_risk',
 			'row_treatment_inconsistency',
 			'repeated_object_treatment_inconsistency',
@@ -3959,6 +3976,178 @@ function mcp_abilities_gutenberg_collect_css_noninteractive_control_affordance_i
 }
 
 /**
+ * Check whether CSS declarations look like a compressed proof/token rail treatment.
+ *
+ * @param string $declarations CSS declarations.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_css_looks_like_compressed_proof_treatment( string $declarations ): bool {
+	$properties = mcp_abilities_gutenberg_extract_css_property_values(
+		$declarations,
+		array( 'display', 'flex-wrap', 'align-items', 'white-space' )
+	);
+
+	$display    = strtolower( trim( (string) ( $properties['display'] ?? '' ) ) );
+	$flex_wrap  = strtolower( trim( (string) ( $properties['flex-wrap'] ?? '' ) ) );
+	$align      = strtolower( trim( (string) ( $properties['align-items'] ?? '' ) ) );
+	$whitespace = strtolower( trim( (string) ( $properties['white-space'] ?? '' ) ) );
+
+	if ( in_array( $display, array( 'flex', 'inline-flex' ), true ) ) {
+		return true;
+	}
+
+	if ( 'nowrap' === $whitespace ) {
+		return true;
+	}
+
+	if ( '' !== $align && in_array( $align, array( 'baseline', 'center' ), true ) && 'nowrap' === $flex_wrap ) {
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * Check whether a selector likely belongs to proof/support metadata rather than a major layout section.
+ *
+ * @param string $selector CSS selector.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_selector_suggests_proof_family( string $selector ): bool {
+	return 1 === preg_match( '/(proof|meta|pill|chip|badge|tag|assurance|reassurance|guarantee|trust)/i', $selector );
+}
+
+/**
+ * Detect proof rows that compress substantive copy into a rail/chip presentation.
+ *
+ * @param string $css CSS to inspect.
+ * @param string $html Rendered HTML.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_css_substantive_proof_compression_issues( string $css, string $html, string $source ): array {
+	if ( '' === trim( $css ) || '' === trim( $html ) ) {
+		return array();
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-design-root">' . $html . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array();
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-design-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( ! $root instanceof DOMElement ) {
+		return array();
+	}
+
+	if ( ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+		return array();
+	}
+
+	$issues = array();
+	$seen   = array();
+
+	foreach ( $rules as $rule ) {
+		$selector_block = trim( (string) ( $rule[1] ?? '' ) );
+		$declarations   = trim( (string) ( $rule[2] ?? '' ) );
+		if ( '' === $selector_block || '' === $declarations ) {
+			continue;
+		}
+
+		if ( ! mcp_abilities_gutenberg_css_looks_like_compressed_proof_treatment( $declarations ) ) {
+			continue;
+		}
+
+		$selectors = array_map( 'trim', explode( ',', $selector_block ) );
+		foreach ( $selectors as $selector ) {
+			if ( '' === $selector || ! mcp_abilities_gutenberg_selector_suggests_proof_family( $selector ) ) {
+				continue;
+			}
+
+			$class_matches = array();
+			preg_match_all( '/\.([a-zA-Z0-9_-]+)/', $selector, $class_matches );
+			$class_names = array_values( array_unique( array_map( 'strval', $class_matches[1] ?? array() ) ) );
+			if ( empty( $class_names ) ) {
+				continue;
+			}
+
+			$matched_nodes = array();
+			foreach ( $class_names as $class_name ) {
+				$nodes = $xpath->query(
+					sprintf( './/*[contains(concat(" ", normalize-space(@class), " "), " %s ")]', $class_name ),
+					$root
+				);
+				if ( ! $nodes instanceof DOMNodeList || 0 === $nodes->length ) {
+					continue;
+				}
+
+				foreach ( $nodes as $node ) {
+					if ( ! $node instanceof DOMElement || mcp_abilities_gutenberg_dom_element_is_interactive( $node ) ) {
+						continue;
+					}
+
+					$label_nodes = $xpath->query( './/strong|.//b|.//h1|.//h2|.//h3|.//h4|.//h5|.//h6', $node );
+					$body_nodes  = $xpath->query( './/span|.//small|.//p|.//em', $node );
+					if ( ! $label_nodes instanceof DOMNodeList || 0 === $label_nodes->length || ! $body_nodes instanceof DOMNodeList || 0 === $body_nodes->length ) {
+						continue;
+					}
+
+					$body_words  = 0;
+					$total_words = mcp_abilities_gutenberg_count_words( (string) $node->textContent );
+					foreach ( $body_nodes as $body_node ) {
+						if ( $body_node instanceof DOMNode ) {
+							$body_words += mcp_abilities_gutenberg_count_words( (string) $body_node->textContent );
+						}
+					}
+
+					if ( $body_words < 4 || $total_words < 7 ) {
+						continue;
+					}
+
+					$matched_nodes[] = $node;
+				}
+			}
+
+			if ( count( $matched_nodes ) < 2 ) {
+				continue;
+			}
+
+			$key = md5( $selector . '|' . $declarations );
+			if ( isset( $seen[ $key ] ) ) {
+				continue;
+			}
+			$seen[ $key ] = true;
+
+			$examples = array();
+			foreach ( array_slice( $matched_nodes, 0, 4 ) as $node ) {
+				$examples[] = mcp_abilities_gutenberg_describe_dom_element( $node );
+			}
+
+			$issues[] = array(
+				'type'      => 'substantive_proof_compression_risk',
+				'severity'  => 'notice',
+				'source'    => $source,
+				'selector'  => mcp_abilities_gutenberg_compact_css_snippet( $selector ),
+				'examples'  => array_values( array_unique( $examples ) ),
+				'count'     => count( $matched_nodes ),
+				'message'   => 'Proof items with real explanatory copy are being compressed into a rail/chip treatment. Once a proof point has both a label and a supporting line, it should read as an open proof list or module, not as squeezed metadata.',
+			);
+		}
+	}
+
+	return $issues;
+}
+
+/**
  * Detect trailing bottom-gap styling on content wrappers.
  *
  * @param string $css CSS to inspect.
@@ -4973,6 +5162,113 @@ function mcp_abilities_gutenberg_collect_repeated_object_treatment_issues( strin
 }
 
 /**
+ * Check whether content already contains FAQPage schema.
+ *
+ * @param string $content Raw content.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_content_has_faq_schema( string $content ): bool {
+	return 1 === preg_match( '/"@type"\s*:\s*"FAQPage"|"@type":"FAQPage"/', $content );
+}
+
+/**
+ * Detect visually structured FAQ sections that are missing matching FAQ schema.
+ *
+ * @param string $content Raw content.
+ * @param string $html Rendered HTML.
+ * @param string $source Source label.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_rendered_faq_schema_issues( string $content, string $html, string $source ): array {
+	if ( '' === trim( $html ) || mcp_abilities_gutenberg_content_has_faq_schema( $content ) ) {
+		return array();
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-gutenberg-design-root">' . $html . '</div></body></html>'
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return array();
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$root_nodes = $xpath->query( '//*[@id="mcp-gutenberg-design-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( ! $root instanceof DOMElement ) {
+		return array();
+	}
+
+	$headings = $xpath->query( './/h2|.//h3|.//h4|.//h5|.//h6', $root );
+	if ( ! $headings instanceof DOMNodeList || 0 === $headings->length ) {
+		return array();
+	}
+
+	$faq_pairs = array();
+	foreach ( $headings as $heading ) {
+		if ( ! $heading instanceof DOMElement ) {
+			continue;
+		}
+
+		$question = trim( preg_replace( '/\s+/u', ' ', (string) $heading->textContent ) );
+		if ( '' === $question || ! preg_match( '/\?\s*$/u', $question ) ) {
+			continue;
+		}
+
+		$container = $heading->parentNode instanceof DOMElement ? $heading->parentNode : null;
+		if ( ! $container instanceof DOMElement ) {
+			continue;
+		}
+
+		$answer_nodes = $xpath->query( './/p[normalize-space()]', $container );
+		if ( ! $answer_nodes instanceof DOMNodeList || 0 === $answer_nodes->length ) {
+			continue;
+		}
+
+		$answer_text = '';
+		foreach ( $answer_nodes as $answer_node ) {
+			if ( ! $answer_node instanceof DOMElement ) {
+				continue;
+			}
+
+			$answer_text = trim( preg_replace( '/\s+/u', ' ', (string) $answer_node->textContent ) );
+			if ( '' !== $answer_text ) {
+				break;
+			}
+		}
+
+		if ( mcp_abilities_gutenberg_count_words( $answer_text ) < 6 ) {
+			continue;
+		}
+
+		$faq_pairs[] = array(
+			'question' => $question,
+			'selector' => mcp_abilities_gutenberg_describe_dom_element( $container ),
+		);
+	}
+
+	if ( count( $faq_pairs ) < 2 ) {
+		return array();
+	}
+
+	return array(
+		array(
+			'type'      => 'faq_schema_missing_risk',
+			'severity'  => 'warning',
+			'source'    => $source,
+			'count'     => count( $faq_pairs ),
+			'selectors' => array_values( array_unique( array_slice( array_map( 'strval', wp_list_pluck( $faq_pairs, 'selector' ) ), 0, 6 ) ) ),
+			'questions' => array_values( array_slice( array_map( 'strval', wp_list_pluck( $faq_pairs, 'question' ) ), 0, 4 ) ),
+			'message'   => 'The page visually presents a real FAQ, but it does not include matching FAQ schema. Keep the design if it works, but add machine-readable FAQ structure underneath it.',
+		),
+	);
+}
+
+/**
  * Detect drifting section spacing rhythm from authored Gutenberg block values.
  *
  * @param string $content Raw Gutenberg content.
@@ -5860,7 +6156,8 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 		mcp_abilities_gutenberg_collect_rendered_support_module_cramp_issues( $rendered_html, 'rendered-html' ),
 		mcp_abilities_gutenberg_collect_rendered_row_treatment_issues( $rendered_html, 'rendered-html' ),
 		mcp_abilities_gutenberg_collect_repeated_object_treatment_issues( $rendered_html, 'rendered-html' ),
-		mcp_abilities_gutenberg_collect_rendered_boxed_module_issues( $rendered_html, 'rendered-html' )
+		mcp_abilities_gutenberg_collect_rendered_boxed_module_issues( $rendered_html, 'rendered-html' ),
+		mcp_abilities_gutenberg_collect_rendered_faq_schema_issues( $content, $rendered_html, 'rendered-html' )
 	);
 
 	$signals['issue_types'] = array_values(
@@ -5889,6 +6186,8 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 			$score -= 16;
 		} elseif ( 'followup_cluster_detachment_risk' === $type ) {
 			$score -= 12;
+		} elseif ( 'faq_schema_missing_risk' === $type ) {
+			$score -= 14;
 		} elseif ( 'fullwidth_section_seam_gap_risk' === $type ) {
 			$score -= 14;
 		} elseif ( 'sibling_treatment_inconsistency' === $type ) {
@@ -5933,6 +6232,9 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 	}
 	if ( in_array( 'followup_cluster_detachment_risk', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'Keep follow-up proof rows, metadata strips, and support clusters visually attached to the CTA or copy they belong to. If the gap gets too loose, the cluster stops feeling like part of the same selling moment.';
+	}
+	if ( in_array( 'faq_schema_missing_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'If the page clearly behaves like an FAQ, do not stop at the visual layout. Preserve the design if it works, but add matching FAQ schema underneath it so the content is machine-readable too.';
 	}
 	if ( in_array( 'fullwidth_section_seam_gap_risk', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'When adjacent full-width sections are meant to touch, explicitly neutralize flow-layout margins between them. Otherwise WordPress block gap can leave a visible seam or bright strip between sections.';
@@ -6060,6 +6362,17 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 					'Tighten the local top spacing so the support row reads as part of the same cluster rather than a detached afterthought.',
 					'Use a compact gap for CTA-to-proof transitions inside a hero or intro. Save larger gaps for real section breaks.',
 					'If the support row needs stronger separation, give it a clearer structural reason such as a contrasting surface or deliberate section wrapper instead of only empty air.',
+				),
+			);
+		} elseif ( 'faq_schema_missing_risk' === $type ) {
+			$suggestions[] = array(
+				'type'      => $type,
+				'selectors' => array_values( array_map( 'strval', is_array( $issue['selectors'] ?? null ) ? $issue['selectors'] : array() ) ),
+				'problem'   => 'The page visually presents a real FAQ, but there is no matching FAQ schema underneath it.',
+				'fixes'     => array(
+					'Keep the current FAQ design if it is working visually; do not flatten it just to chase schema.',
+					'Add matching `FAQPage` JSON-LD or the owning plugin block underneath the visual FAQ so the questions and answers are machine-readable too.',
+					'Make sure the schema questions and answers match the visible FAQ copy exactly instead of drifting into a second version.',
 				),
 			);
 		} elseif ( 'fullwidth_section_seam_gap_risk' === $type ) {

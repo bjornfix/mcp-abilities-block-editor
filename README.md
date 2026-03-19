@@ -163,6 +163,11 @@ The plugin exposes blocks in a normalized shape:
 
 ## Changelog
 
+### 0.20.4
+
+- Add `faq_schema_missing_risk` so the design evaluator can fail visually real FAQ sections that still lack matching FAQ schema.
+- Expand block guidance and design-fix suggestions so AI clients preserve a good FAQ layout and add matching `FAQPage` JSON-LD underneath it instead of flattening the design.
+
 ### 0.20.3
 
 - Fix support-row cramp evaluation so distinct Gutenberg rows no longer collapse into one generic selector; process rows, proof strips, and other repeated support modules are now reported separately.
