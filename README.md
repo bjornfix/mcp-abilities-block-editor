@@ -6,7 +6,7 @@ Gutenberg and block-editor automation for WordPress via MCP.
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 
 **Tested up to:** 6.9
-**Stable tag:** 0.20.7
+**Stable tag:** 0.20.8
 **Requires PHP:** 8.0
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
@@ -186,6 +186,9 @@ This add-on closes that gap. You can ask an agent to choose the right block, ins
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.8
+- Fixed zero-parameter ability schemas so MCP Adapter 0.4.x clients do not receive invalid `properties: []` JSON
 
 ### 0.20.7
 - Refined `support_module_cramp_risk` so clearly stacked/list-based proof groups are not treated like cramped horizontal strips

@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.7
+ * Version: 0.20.8
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -8793,8 +8793,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -8829,8 +8827,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -8865,8 +8861,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -8901,8 +8895,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -8937,8 +8929,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -8979,7 +8969,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'description' => 'Optional search term for block names or titles.',
 					),
 				),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -9031,8 +9020,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -9070,8 +9057,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -9259,8 +9244,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -9353,7 +9336,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'description' => 'Optional free-form scenario such as hero, CTA, quote, comparison, or body copy.',
 					),
 				),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -9397,8 +9379,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -9433,8 +9413,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -10446,8 +10424,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -10535,8 +10511,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -10834,8 +10808,6 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
-				'default'              => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
