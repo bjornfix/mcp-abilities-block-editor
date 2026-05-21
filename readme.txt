@@ -2,9 +2,9 @@
 Contributors: devenia
 Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.8
+Stable tag: 0.20.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,10 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.9 =
+
+* Fixed: broad Gutenberg content replacement paths now block accidental removal of existing GenerateBlocks/design markup unless explicitly overridden.
 
 = 0.20.8 =
 

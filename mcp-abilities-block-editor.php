@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.8
+ * Version: 0.20.9
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -5682,6 +5682,56 @@ function mcp_abilities_gutenberg_assert_layout_safe_for_write( string $content )
 }
 
 /**
+ * Detect builder/design markup that should not disappear during broad writes.
+ *
+ * @param string $content Post content.
+ * @return string[]
+ */
+function mcp_abilities_gutenberg_detect_design_markup_markers( string $content ): array {
+	$markers = array();
+
+	if ( false !== strpos( $content, '<!-- wp:generateblocks/' ) || false !== strpos( $content, 'gb-container-' ) || false !== strpos( $content, 'gb-grid-wrapper-' ) || false !== strpos( $content, 'gb-headline-' ) || false !== strpos( $content, 'gb-button-' ) ) {
+		$markers[] = 'generateblocks';
+	}
+
+	if ( preg_match( '/\bdv-page-\d+[-_a-z0-9]*\b/i', $content ) ) {
+		$markers[] = 'devenia-design-classes';
+	}
+
+	return array_values( array_unique( $markers ) );
+}
+
+/**
+ * Block accidental replacement of existing designed content with plain blocks.
+ *
+ * @param string $old_content Existing post content.
+ * @param string $new_content Proposed post content.
+ * @param array  $input       Ability input.
+ * @return true|WP_Error
+ */
+function mcp_abilities_gutenberg_assert_design_markup_preserved( string $old_content, string $new_content, array $input ) {
+	if ( ! empty( $input['allow_design_markup_loss'] ) ) {
+		return true;
+	}
+
+	$old_markers = mcp_abilities_gutenberg_detect_design_markup_markers( $old_content );
+	if ( empty( $old_markers ) ) {
+		return true;
+	}
+
+	$new_markers = mcp_abilities_gutenberg_detect_design_markup_markers( $new_content );
+	$lost        = array_values( array_diff( $old_markers, $new_markers ) );
+	if ( empty( $lost ) ) {
+		return true;
+	}
+
+	return new WP_Error(
+		'mcp_gutenberg_design_markup_loss_blocked',
+		'Blocked save because it would remove existing design markup (' . implode( ', ', $lost ) . '). Use a targeted block mutation or pass allow_design_markup_loss=true only when intentionally replacing the page design.'
+	);
+}
+
+/**
  * Evaluate rendered page context for a post/page.
  *
  * @param int $post_id Post ID.
@@ -8535,6 +8585,14 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 
 	$existing_post = '' !== $slug ? mcp_abilities_gutenberg_find_page_by_slug( $slug ) : null;
 	if ( $upsert_matching_slug && $existing_post instanceof WP_Post ) {
+		$design_guard = mcp_abilities_gutenberg_assert_design_markup_preserved( (string) $existing_post->post_content, $content, $input );
+		if ( is_wp_error( $design_guard ) ) {
+			return array(
+				'success' => false,
+				'message' => $design_guard->get_error_message(),
+			);
+		}
+
 		$update_result = wp_update_post(
 			wp_slash(
 				array(
@@ -8640,6 +8698,7 @@ function mcp_abilities_gutenberg_create_page_from_pattern( array $input ): array
 			'slug'                 => isset( $input['slug'] ) ? (string) $input['slug'] : sanitize_title( (string) $pattern['title'] ),
 			'status'               => isset( $input['status'] ) ? (string) $input['status'] : 'draft',
 			'upsert_matching_slug' => ! empty( $input['upsert_matching_slug'] ),
+			'allow_design_markup_loss' => ! empty( $input['allow_design_markup_loss'] ),
 			'content'              => (string) $pattern['content'],
 		)
 	);
@@ -8695,6 +8754,14 @@ function mcp_abilities_gutenberg_insert_pattern_into_post( array $input ): array
 		return array(
 			'success' => false,
 			'message' => $layout_guard->get_error_message(),
+		);
+	}
+
+	$design_guard = mcp_abilities_gutenberg_assert_design_markup_preserved( $existing_content, $content, $input );
+	if ( is_wp_error( $design_guard ) ) {
+		return array(
+			'success' => false,
+			'message' => $design_guard->get_error_message(),
 		);
 	}
 
@@ -11167,6 +11234,11 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'type'        => 'boolean',
 						'description' => 'Update the earliest existing page with the same slug instead of creating a duplicate page.',
 					),
+					'allow_design_markup_loss' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'Allow upsert to replace an existing page even when GenerateBlocks/design markup would be removed. Defaults to false.',
+					),
 					'status' => array(
 						'type'        => 'string',
 						'description' => 'Page status.',
@@ -11438,6 +11510,11 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'type'        => 'boolean',
 						'description' => 'Update the earliest existing page with the same slug instead of creating a duplicate page.',
 					),
+					'allow_design_markup_loss' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'Allow upsert to replace an existing page even when GenerateBlocks/design markup would be removed. Defaults to false.',
+					),
 					'status' => array(
 						'type'        => 'string',
 						'description' => 'Page status.',
@@ -11548,6 +11625,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'status'               => isset( $input['status'] ) ? (string) $input['status'] : 'draft',
 						'content'              => $payload['content'],
 						'upsert_matching_slug' => ! empty( $input['upsert_matching_slug'] ),
+						'allow_design_markup_loss' => ! empty( $input['allow_design_markup_loss'] ),
 					)
 				);
 
@@ -11590,6 +11668,11 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'type'        => 'string',
 						'description' => 'How to apply the pattern content.',
 						'enum'        => array( 'append', 'prepend', 'replace' ),
+					),
+					'allow_design_markup_loss' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'Allow replace mode to remove existing GenerateBlocks/design markup. Defaults to false.',
 					),
 				),
 				'additionalProperties' => false,
@@ -12375,6 +12458,11 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'description' => 'Optional post status update.',
 						'enum'        => array( 'publish', 'draft', 'pending', 'private', 'future' ),
 					),
+					'allow_design_markup_loss' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'Allow replacing content even when existing GenerateBlocks/design markup would be removed. Defaults to false.',
+					),
 				),
 				'additionalProperties' => false,
 			),
@@ -12433,6 +12521,14 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					return array(
 						'success' => false,
 						'message' => $layout_guard->get_error_message(),
+					);
+				}
+
+				$design_guard = mcp_abilities_gutenberg_assert_design_markup_preserved( (string) $post->post_content, $content, is_array( $input ) ? $input : array() );
+				if ( is_wp_error( $design_guard ) ) {
+					return array(
+						'success' => false,
+						'message' => $design_guard->get_error_message(),
 					);
 				}
 

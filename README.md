@@ -5,8 +5,8 @@ Gutenberg and block-editor automation for WordPress via MCP.
 [![GitHub release](https://img.shields.io/github/v/release/bjornfix/mcp-abilities-block-editor)](https://github.com/bjornfix/mcp-abilities-block-editor/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 
-**Tested up to:** 6.9
-**Stable tag:** 0.20.8
+**Tested up to:** 7.0
+**Stable tag:** 0.20.9
 **Requires PHP:** 8.0
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
@@ -186,6 +186,9 @@ This add-on closes that gap. You can ask an agent to choose the right block, ins
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.9
+- Fixed broad Gutenberg content replacement paths so they block accidental removal of existing GenerateBlocks/design markup unless explicitly overridden
 
 ### 0.20.8
 - Fixed zero-parameter ability schemas so MCP Adapter 0.4.x clients do not receive invalid `properties: []` JSON
