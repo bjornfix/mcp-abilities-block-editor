@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.9
+Stable tag: 0.20.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,12 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.10 =
+
+* Fixed: MCP Gutenberg saves now normalize legacy `core/list` markup into current `core/list-item` inner blocks before writing content, preventing editor-invalid list blocks on WordPress 7.0.
+* Fixed: MCP Gutenberg saves now repair `core/button` border-class mismatches and URL attributes that lost JSON unicode escaping during transport.
+* Added: `gutenberg/validate-content` now reports editor-compatibility issues that PHP block round-trips can miss.
 
 = 0.20.9 =
 

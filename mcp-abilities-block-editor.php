@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.9
+ * Version: 0.20.10
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -246,6 +246,337 @@ function mcp_abilities_gutenberg_denormalize_blocks( $blocks ) {
 	}
 
 	return $normalized;
+}
+
+/**
+ * Return an element's inner HTML.
+ *
+ * @param DOMElement $element Element to inspect.
+ * @return string
+ */
+function mcp_abilities_gutenberg_dom_inner_html( DOMElement $element ): string {
+	$html = '';
+	foreach ( $element->childNodes as $child ) {
+		$html .= $element->ownerDocument->saveHTML( $child );
+	}
+
+	return $html;
+}
+
+/**
+ * Repair URL-ish block attribute strings that lost JSON unicode escaping during transport.
+ *
+ * JSON clients sometimes strip the backslash from `\u0026`, leaving URL attrs like
+ * `...?utm_source=siteu0026utm_medium=...`. Gutenberg can then compare a valid saved
+ * anchor href against a broken block-comment attr. Keep the repair narrow to URLs.
+ *
+ * @param mixed $value Attribute value.
+ * @return mixed
+ */
+function mcp_abilities_gutenberg_repair_urlish_attr_value( $value ) {
+	if ( is_array( $value ) ) {
+		foreach ( $value as $key => $child ) {
+			$value[ $key ] = mcp_abilities_gutenberg_repair_urlish_attr_value( $child );
+		}
+		return $value;
+	}
+
+	if ( ! is_string( $value ) || false === strpos( $value, '://' ) ) {
+		return $value;
+	}
+
+	$decoded = html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+	$decoded = preg_replace( '/(?<=[A-Za-z0-9_%.-])u0026(?=[A-Za-z0-9_.-]+=)/', '&', $decoded );
+
+	return is_string( $decoded ) ? $decoded : $value;
+}
+
+/**
+ * Normalize legacy core/list markup to the nested list-item shape expected by current Gutenberg.
+ *
+ * WordPress PHP can round-trip old list markup (`<ul><li>...`) while the editor JS
+ * treats the same block as stale because current core/list persists `core/list-item`
+ * inner blocks. Normalize before MCP writes so pages reopen cleanly in the editor.
+ *
+ * @param array<string,mixed> $block Parsed WordPress block.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_normalize_list_block_for_editor( array $block ): array {
+	if ( 'core/list' !== ( $block['blockName'] ?? '' ) ) {
+		return $block;
+	}
+
+	if ( ! empty( $block['innerBlocks'] ) || empty( $block['innerHTML'] ) || ! is_string( $block['innerHTML'] ) ) {
+		return $block;
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-list-root">' . $block['innerHTML'] . '</div></body></html>',
+		LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return $block;
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$list_nodes = $xpath->query( '//*[@id="mcp-list-root"]/*[self::ul or self::ol][1]' );
+	$list       = $list_nodes instanceof DOMNodeList ? $list_nodes->item( 0 ) : null;
+	if ( ! $list instanceof DOMElement ) {
+		return $block;
+	}
+
+	$item_nodes = $xpath->query( './li', $list );
+	if ( ! $item_nodes instanceof DOMNodeList || 0 === $item_nodes->length ) {
+		return $block;
+	}
+
+	$tag_name = strtolower( $list->tagName );
+	$attrs    = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+	if ( 'ol' === $tag_name ) {
+		$attrs['ordered'] = true;
+	} elseif ( array_key_exists( 'ordered', $attrs ) && false === (bool) $attrs['ordered'] ) {
+		unset( $attrs['ordered'] );
+	}
+
+	$class_tokens = preg_split( '/\s+/', trim( (string) $list->getAttribute( 'class' ) ) );
+	$class_tokens = is_array( $class_tokens ) ? array_filter( $class_tokens ) : array();
+	if ( ! in_array( 'wp-block-list', $class_tokens, true ) ) {
+		$class_tokens[] = 'wp-block-list';
+	}
+
+	$attribute_parts = array( 'class="' . esc_attr( implode( ' ', array_values( array_unique( $class_tokens ) ) ) ) . '"' );
+	if ( 'ol' === $tag_name ) {
+		if ( $list->hasAttribute( 'start' ) ) {
+			$attribute_parts[] = 'start="' . esc_attr( (string) $list->getAttribute( 'start' ) ) . '"';
+		}
+		if ( $list->hasAttribute( 'reversed' ) ) {
+			$attribute_parts[] = 'reversed';
+			$attrs['reversed'] = true;
+		}
+	}
+
+	$inner_blocks  = array();
+	$inner_content = array( '<' . $tag_name . ' ' . implode( ' ', $attribute_parts ) . '>' );
+
+	foreach ( $item_nodes as $item_node ) {
+		if ( ! $item_node instanceof DOMElement ) {
+			continue;
+		}
+
+		$item_attrs = array();
+		$raw_value  = trim( mcp_abilities_gutenberg_dom_inner_html( $item_node ) );
+		if ( '' !== $raw_value ) {
+			$item_attrs['content'] = $raw_value;
+		}
+
+		$item_html = '<li>' . mcp_abilities_gutenberg_dom_inner_html( $item_node ) . '</li>';
+		$inner_blocks[] = array(
+			'blockName'    => 'core/list-item',
+			'attrs'        => $item_attrs,
+			'innerBlocks'  => array(),
+			'innerHTML'    => $item_html,
+			'innerContent' => array( $item_html ),
+		);
+		$inner_content[] = null;
+	}
+
+	$inner_content[] = '</' . $tag_name . '>';
+
+	$block['attrs']        = $attrs;
+	$block['innerBlocks']  = $inner_blocks;
+	$block['innerHTML']    = '<' . $tag_name . ' ' . implode( ' ', $attribute_parts ) . '></' . $tag_name . '>';
+	$block['innerContent'] = $inner_content;
+
+	return $block;
+}
+
+/**
+ * Normalize core/button markup to match editor-generated classes for style attrs.
+ *
+ * @param array<string,mixed> $block Parsed WordPress block.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_normalize_button_block_for_editor( array $block ): array {
+	if ( 'core/button' !== ( $block['blockName'] ?? '' ) ) {
+		return $block;
+	}
+
+	$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+	$attrs = mcp_abilities_gutenberg_repair_urlish_attr_value( $attrs );
+	$block['attrs'] = is_array( $attrs ) ? $attrs : array();
+
+	$border = $block['attrs']['style']['border'] ?? null;
+	if ( ! is_array( $border ) || empty( $border['color'] ) || empty( $block['innerHTML'] ) || ! is_string( $block['innerHTML'] ) ) {
+		return $block;
+	}
+
+	$internal_errors = libxml_use_internal_errors( true );
+	$document        = new DOMDocument();
+	$loaded          = $document->loadHTML(
+		'<!DOCTYPE html><html><body><div id="mcp-button-root">' . $block['innerHTML'] . '</div></body></html>',
+		LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+	);
+	libxml_clear_errors();
+	libxml_use_internal_errors( $internal_errors );
+
+	if ( ! $loaded ) {
+		return $block;
+	}
+
+	$xpath      = new DOMXPath( $document );
+	$link_nodes = $xpath->query( '//*[@id="mcp-button-root"]//*[self::a or self::button][1]' );
+	$link       = $link_nodes instanceof DOMNodeList ? $link_nodes->item( 0 ) : null;
+	if ( ! $link instanceof DOMElement ) {
+		return $block;
+	}
+
+	$class_tokens = preg_split( '/\s+/', trim( (string) $link->getAttribute( 'class' ) ) );
+	$class_tokens = is_array( $class_tokens ) ? array_filter( $class_tokens ) : array();
+	if ( ! in_array( 'has-border-color', $class_tokens, true ) ) {
+		$class_tokens[] = 'has-border-color';
+		$link->setAttribute( 'class', implode( ' ', array_values( array_unique( $class_tokens ) ) ) );
+	}
+
+	if ( isset( $block['attrs']['url'] ) && is_string( $block['attrs']['url'] ) && $link->hasAttribute( 'href' ) ) {
+		$link->setAttribute( 'href', $block['attrs']['url'] );
+	}
+
+	$root_nodes = $xpath->query( '//*[@id="mcp-button-root"]' );
+	$root       = $root_nodes instanceof DOMNodeList ? $root_nodes->item( 0 ) : null;
+	if ( $root instanceof DOMElement ) {
+		$block['innerHTML'] = mcp_abilities_gutenberg_dom_inner_html( $root );
+		$block['innerContent'] = array( $block['innerHTML'] );
+	}
+
+	return $block;
+}
+
+/**
+ * Recursively normalize parsed blocks to avoid editor-invalid saved content.
+ *
+ * @param array<int,array<string,mixed>> $blocks Parsed WordPress blocks.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_normalize_blocks_for_editor_save( array $blocks ): array {
+	foreach ( $blocks as $index => $block ) {
+		if ( ! is_array( $block ) ) {
+			continue;
+		}
+
+		if ( isset( $block['attrs'] ) && is_array( $block['attrs'] ) ) {
+			$block['attrs'] = mcp_abilities_gutenberg_repair_urlish_attr_value( $block['attrs'] );
+		}
+
+		if ( ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
+			$block['innerBlocks'] = mcp_abilities_gutenberg_normalize_blocks_for_editor_save( $block['innerBlocks'] );
+		}
+
+		$block = mcp_abilities_gutenberg_normalize_list_block_for_editor( $block );
+		$block = mcp_abilities_gutenberg_normalize_button_block_for_editor( $block );
+
+		$blocks[ $index ] = $block;
+	}
+
+	return $blocks;
+}
+
+/**
+ * Serialize blocks through MCP's editor-safety normalizer.
+ *
+ * @param array<int,array<string,mixed>> $blocks Parsed WordPress blocks.
+ * @return string
+ */
+function mcp_abilities_gutenberg_serialize_blocks_for_editor( array $blocks ): string {
+	return serialize_blocks( mcp_abilities_gutenberg_normalize_blocks_for_editor_save( $blocks ) );
+}
+
+/**
+ * Prepare raw Gutenberg content for editor-safe saving.
+ *
+ * @param string $content Raw Gutenberg content.
+ * @return string
+ */
+function mcp_abilities_gutenberg_prepare_content_for_editor_save( string $content ): string {
+	if ( '' === trim( $content ) || false === strpos( $content, '<!-- wp:' ) ) {
+		return $content;
+	}
+
+	return mcp_abilities_gutenberg_serialize_blocks_for_editor( parse_blocks( $content ) );
+}
+
+/**
+ * Detect server-observable editor compatibility issues that PHP round-trips can miss.
+ *
+ * @param string $content Raw Gutenberg content.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_editor_compatibility_issues( string $content ): array {
+	$issues = array();
+	$blocks = parse_blocks( $content );
+
+	$walk = static function ( array $nodes, array $path = array() ) use ( &$walk, &$issues ): void {
+		foreach ( $nodes as $index => $block ) {
+			if ( ! is_array( $block ) ) {
+				continue;
+			}
+
+			$current_path = array_merge( $path, array( $index ) );
+			$block_name   = (string) ( $block['blockName'] ?? '' );
+			$attrs        = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+			$inner_html   = isset( $block['innerHTML'] ) ? (string) $block['innerHTML'] : '';
+
+			if ( 'core/list' === $block_name && empty( $block['innerBlocks'] ) && preg_match( '/<(ul|ol)\\b[^>]*>\\s*<li\\b/i', $inner_html ) ) {
+				$issues[] = array(
+					'severity'   => 'warning',
+					'code'       => 'legacy_core_list_serialization',
+					'path'       => $current_path,
+					'block_name' => $block_name,
+					'message'    => 'core/list uses legacy flat <li> markup without core/list-item inner blocks; current Gutenberg editor may mark it invalid.',
+				);
+			}
+
+			if ( 'core/button' === $block_name ) {
+				$border = $attrs['style']['border'] ?? null;
+				if ( is_array( $border ) && ! empty( $border['color'] ) && false === strpos( $inner_html, 'has-border-color' ) ) {
+					$issues[] = array(
+						'severity'   => 'warning',
+						'code'       => 'button_border_class_mismatch',
+						'path'       => $current_path,
+						'block_name' => $block_name,
+						'message'    => 'core/button has border color style but saved anchor markup lacks has-border-color; current Gutenberg editor may mark it invalid.',
+					);
+				}
+			}
+
+			array_walk_recursive(
+				$attrs,
+				static function ( $value ) use ( &$issues, $current_path, $block_name ): void {
+					if ( is_string( $value ) && false !== strpos( $value, '://' ) && preg_match( '/(?<=[A-Za-z0-9_%.-])u0026(?=[A-Za-z0-9_.-]+=)/', $value ) ) {
+						$issues[] = array(
+							'severity'   => 'warning',
+							'code'       => 'url_unicode_escape_backslash_lost',
+							'path'       => $current_path,
+							'block_name' => $block_name,
+							'message'    => 'A URL attribute contains u0026 without the JSON backslash; save normalization will repair it to an ampersand.',
+						);
+					}
+				}
+			);
+
+			if ( ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
+				$walk( $block['innerBlocks'], $current_path );
+			}
+		}
+	};
+
+	$walk( $blocks );
+
+	return $issues;
 }
 
 /**
@@ -1045,7 +1376,7 @@ function mcp_abilities_gutenberg_save_template_entity( string $post_type, array 
 				'message' => $blocks->get_error_message(),
 			);
 		}
-		$content = serialize_blocks( $blocks );
+		$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $blocks );
 	}
 
 	if ( null === $content ) {
@@ -1054,6 +1385,7 @@ function mcp_abilities_gutenberg_save_template_entity( string $post_type, array 
 			'message' => 'Provide either content or blocks.',
 		);
 	}
+	$content = mcp_abilities_gutenberg_prepare_content_for_editor_save( $content );
 
 	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
 	if ( is_wp_error( $layout_guard ) ) {
@@ -1224,7 +1556,7 @@ function mcp_abilities_gutenberg_save_synced_pattern( array $input ): array {
 				'message' => $blocks->get_error_message(),
 			);
 		}
-		$content = serialize_blocks( $blocks );
+		$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $blocks );
 	}
 
 	if ( null === $content ) {
@@ -1233,6 +1565,7 @@ function mcp_abilities_gutenberg_save_synced_pattern( array $input ): array {
 			'message' => 'Provide either content or blocks.',
 		);
 	}
+	$content = mcp_abilities_gutenberg_prepare_content_for_editor_save( $content );
 
 	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
 	if ( is_wp_error( $layout_guard ) ) {
@@ -1386,7 +1719,7 @@ function mcp_abilities_gutenberg_extract_synced_pattern( array $input ): array {
 			);
 		}
 
-		$content = serialize_blocks( $denormalized );
+		$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
 		$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
 		if ( is_wp_error( $layout_guard ) ) {
 			return array(
@@ -1434,8 +1767,8 @@ function mcp_abilities_gutenberg_extract_synced_pattern( array $input ): array {
 			'modified' => (string) $post->post_modified_gmt,
 		) : null,
 		'replaced'     => $replace_source,
-		'content'      => $replace_source ? serialize_blocks( mcp_abilities_gutenberg_denormalize_blocks( $mutated ) ) : '',
-		'summary'      => $replace_source ? mcp_abilities_gutenberg_content_summary( serialize_blocks( mcp_abilities_gutenberg_denormalize_blocks( $mutated ) ) ) : array(),
+		'content'      => $replace_source ? mcp_abilities_gutenberg_serialize_blocks_for_editor( mcp_abilities_gutenberg_denormalize_blocks( $mutated ) ) : '',
+		'summary'      => $replace_source ? mcp_abilities_gutenberg_content_summary( mcp_abilities_gutenberg_serialize_blocks_for_editor( mcp_abilities_gutenberg_denormalize_blocks( $mutated ) ) ) : array(),
 		'blocks'       => $replace_source ? $mutated : array(),
 	);
 
@@ -1508,7 +1841,7 @@ function mcp_abilities_gutenberg_insert_synced_pattern_into_post( array $input )
 		);
 	}
 
-	$content = serialize_blocks( $denormalized );
+	$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
 	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
 	if ( is_wp_error( $layout_guard ) ) {
 		return array(
@@ -1656,7 +1989,7 @@ function mcp_abilities_gutenberg_save_navigation_entity( array $input ): array {
 				'message' => $blocks->get_error_message(),
 			);
 		}
-		$content = serialize_blocks( $blocks );
+		$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $blocks );
 	}
 
 	if ( null === $content ) {
@@ -1665,6 +1998,7 @@ function mcp_abilities_gutenberg_save_navigation_entity( array $input ): array {
 			'message' => 'Provide either content or blocks.',
 		);
 	}
+	$content = mcp_abilities_gutenberg_prepare_content_for_editor_save( $content );
 
 	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
 	if ( is_wp_error( $layout_guard ) ) {
@@ -6087,7 +6421,7 @@ function mcp_abilities_gutenberg_transform_blocks( array $input ) {
 		return $denormalized;
 	}
 
-	$content = serialize_blocks( $denormalized );
+	$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
 
 	return array(
 		'operation' => $operation,
@@ -7227,7 +7561,7 @@ function mcp_abilities_gutenberg_replace_text_in_blocks( array $blocks, string $
 		return $denormalized;
 	}
 
-	$content = serialize_blocks( $denormalized );
+	$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
 
 	return array(
 		'content'            => $content,
@@ -7317,7 +7651,7 @@ function mcp_abilities_gutenberg_mutate_block_tree( array $input ) {
 		return $denormalized;
 	}
 
-	$content = serialize_blocks( $denormalized );
+	$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
 
 	return array(
 		'operation' => $operation,
@@ -7435,7 +7769,7 @@ function mcp_abilities_gutenberg_insert_inner_block( array $input ) {
 		return $denormalized;
 	}
 
-	$content = serialize_blocks( $denormalized );
+	$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
 
 	return array(
 		'path'    => $path,
@@ -7483,7 +7817,7 @@ function mcp_abilities_gutenberg_duplicate_block( array $input ) {
 		return $denormalized;
 	}
 
-	$content = serialize_blocks( $denormalized );
+	$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
 
 	return array(
 		'path'     => $path,
@@ -7538,7 +7872,7 @@ function mcp_abilities_gutenberg_move_block( array $input ) {
 		return $denormalized;
 	}
 
-	$content = serialize_blocks( $denormalized );
+	$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
 
 	return array(
 		'from_path'      => $from_path,
@@ -7673,7 +8007,7 @@ function mcp_abilities_gutenberg_normalize_heading_levels( array $input ) {
 		return $denormalized;
 	}
 
-	$content = serialize_blocks( $denormalized );
+	$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
 
 	return array(
 		'content' => $content,
@@ -8140,9 +8474,9 @@ function mcp_abilities_gutenberg_generate_section_payload( array $input ) {
 
 	return array(
 		'section' => $section,
-		'content' => $content,
-		'summary' => mcp_abilities_gutenberg_content_summary( $content ),
-		'blocks'  => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $content ) ),
+		'content' => mcp_abilities_gutenberg_prepare_content_for_editor_save( $content ),
+		'summary' => mcp_abilities_gutenberg_content_summary( mcp_abilities_gutenberg_prepare_content_for_editor_save( $content ) ),
+		'blocks'  => mcp_abilities_gutenberg_normalize_blocks( parse_blocks( mcp_abilities_gutenberg_prepare_content_for_editor_save( $content ) ) ),
 	);
 }
 
@@ -8168,6 +8502,7 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 
 	$all_block_names = mcp_abilities_gutenberg_collect_block_names( $normalized );
 	$layout_risks    = mcp_abilities_gutenberg_collect_content_layout_risks( $content );
+	$editor_compatibility_issues = mcp_abilities_gutenberg_collect_editor_compatibility_issues( $content );
 	$markup_bearing_block_names = array();
 	$comment_only_block_names   = array();
 	$walk_blocks                = static function ( array $blocks ) use ( &$walk_blocks, &$markup_bearing_block_names, &$comment_only_block_names ): void {
@@ -8239,6 +8574,19 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 			$warnings[] = 'Multiple fixed content measures detected in embedded Gutenberg styling: ' . implode( ', ', array_slice( $measure_values, 0, 6 ) ) . '. Interior sections usually need one primary width rhythm.';
 		}
 	}
+	if ( ! empty( $editor_compatibility_issues ) ) {
+		$issue_codes = array_values(
+			array_unique(
+				array_map(
+					static function ( array $issue ): string {
+						return (string) ( $issue['code'] ?? '' );
+					},
+					$editor_compatibility_issues
+				)
+			)
+		);
+		$warnings[] = 'Editor-compatibility normalization recommended before save: ' . implode( ', ', $issue_codes ) . '.';
+	}
 
 	return array(
 		'summary'                 => mcp_abilities_gutenberg_content_summary( $content ),
@@ -8256,6 +8604,10 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 			'shell_full_width_css_detected' => ! empty( $layout_risks['shell_full_width_css_detected'] ),
 			'content_measures'          => $layout_risks['content_measures'],
 			'issues'                    => $layout_risks['issues'],
+		),
+		'editor_compatibility'    => array(
+			'issue_count' => count( $editor_compatibility_issues ),
+			'issues'      => $editor_compatibility_issues,
 		),
 		'mutation_guardrails'     => array(
 			'static_attr_changes_require_markup_regeneration' => ! empty( $markup_bearing_block_names ),
@@ -8556,7 +8908,7 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 			);
 		}
 
-		$content = serialize_blocks( $blocks );
+		$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $blocks );
 	}
 
 	if ( null === $content ) {
@@ -8565,6 +8917,7 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 			'message' => 'Provide either content or blocks.',
 		);
 	}
+	$content = mcp_abilities_gutenberg_prepare_content_for_editor_save( $content );
 
 	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
 	if ( is_wp_error( $layout_guard ) ) {
@@ -8748,6 +9101,7 @@ function mcp_abilities_gutenberg_insert_pattern_into_post( array $input ): array
 	} else {
 		$content = $existing_content . "\n\n" . $pattern_content;
 	}
+	$content = mcp_abilities_gutenberg_prepare_content_for_editor_save( $content );
 
 	$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
 	if ( is_wp_error( $layout_guard ) ) {
@@ -10387,7 +10741,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					);
 				}
 
-				$content = serialize_blocks( $blocks );
+				$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $blocks );
 
 				return array(
 					'success' => true,
@@ -12506,7 +12860,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						);
 					}
 
-					$content = serialize_blocks( $blocks );
+					$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $blocks );
 				}
 
 				if ( null === $content ) {
@@ -12515,6 +12869,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'message' => 'Provide either content or blocks.',
 					);
 				}
+				$content = mcp_abilities_gutenberg_prepare_content_for_editor_save( $content );
 
 				$layout_guard = mcp_abilities_gutenberg_assert_layout_safe_for_write( $content );
 				if ( is_wp_error( $layout_guard ) ) {
