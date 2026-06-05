@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.10
+Stable tag: 0.20.11
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,11 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.11 =
+
+* Improved: Gutenberg write paths now share one editor-safe save pipeline for content preparation, layout validation, design-markup protection, persistence, and response formatting.
+* Improved: page, template, navigation, synced-pattern, and post block updates now use the same write safety checks.
 
 = 0.20.10 =
 

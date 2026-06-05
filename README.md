@@ -6,7 +6,7 @@ Gutenberg and block-editor automation for WordPress via MCP.
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.10
+**Stable tag:** 0.20.11
 **Requires PHP:** 8.0
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
@@ -186,6 +186,10 @@ This add-on closes that gap. You can ask an agent to choose the right block, ins
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.11
+- Shared one editor-safe save pipeline across Gutenberg write paths for content preparation, layout validation, design-markup protection, persistence, and response formatting
+- Reused the same write safety checks for page, template, navigation, synced-pattern, and post block updates
 
 ### 0.20.10
 - Normalized legacy `core/list` markup into current `core/list-item` inner blocks before MCP writes, preventing WordPress 7.0 editor-invalid list blocks
