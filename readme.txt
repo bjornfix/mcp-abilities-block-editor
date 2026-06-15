@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.11
+Stable tag: 0.20.12
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,10 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.12 =
+
+* Fixed: `gutenberg/audit-content` no longer flags `core/buttons` wrapper blocks as missing links, avoiding false `button_without_link` warnings during valid button-group layouts.
 
 = 0.20.11 =
 
