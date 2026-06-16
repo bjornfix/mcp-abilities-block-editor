@@ -1,7 +1,7 @@
 === MCP Abilities - Block Editor ===
 Contributors: devenia
 Tags: mcp, gutenberg, block-editor, blocks, automation
-Requires at least: 6.9
+Requires at least: 7.0
 Tested up to: 7.0
 Requires PHP: 8.0
 Stable tag: 0.20.12

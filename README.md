@@ -2,13 +2,13 @@
 
 WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
 
-[![GitHub release](https://img.shields.io/github/v/release/bjornfix/mcp-abilities-block-editor)](https://github.com/bjornfix/mcp-abilities-block-editor/releases)
+[![GitHub release](https://badgen.net/github/release/bjornfix/mcp-abilities-block-editor/stable)](https://github.com/bjornfix/mcp-abilities-block-editor/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
-[![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue.svg)](https://wordpress.org)
+[![WordPress](https://img.shields.io/badge/WordPress-7.0%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.11
+**Stable tag:** 0.20.12
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
