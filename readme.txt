@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 7.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.13
+Stable tag: 0.20.14
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,11 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.14 =
+* Improved: ability error responses now preserve WordPress error codes, issue lists, and structured error data instead of returning message-only failures.
+* Improved: all ability output schemas now include the shared error fields used by Gutenberg write and generation gates.
+* Hardened: site-editor template, template-part, and navigation write abilities now require `edit_theme_options` at the ability permission layer.
 
 = 0.20.13 =
 * Refactored the block-editor implementation into focused include modules for core block handling, catalogs/site editor data, content analysis, block mutations, generation, and ability registration. No MCP ability names changed.

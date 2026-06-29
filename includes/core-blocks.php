@@ -5,6 +5,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Build a consistent ability error response from a WordPress error.
+ *
+ * @param WP_Error $error Error object.
+ * @return array<string,mixed>
+ */
+function mcp_abilities_gutenberg_error_response( WP_Error $error ): array {
+	$data = $error->get_error_data();
+
+	$response = array(
+		'success' => false,
+		'code'    => $error->get_error_code(),
+		'message' => $error->get_error_message(),
+	);
+
+	if ( is_array( $data ) && array_key_exists( 'issues', $data ) ) {
+		$response['issues'] = $data['issues'];
+	}
+
+	if ( null !== $data && array() !== $data ) {
+		$response['data'] = $data;
+	}
+
+	return $response;
+}
+
+/**
  * Core Gutenberg block parsing, serialization, editor-safety, and post helpers.
  */
 function mcp_abilities_gutenberg_normalize_block( array $block ): array {

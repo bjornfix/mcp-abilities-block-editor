@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.13
+ * Version: 0.20.14
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -45,6 +45,13 @@ function mcp_abilities_gutenberg_permission_callback(): bool {
 }
 
 /**
+ * Permission callback for site-editor write abilities.
+ */
+function mcp_abilities_gutenberg_site_editor_permission_callback(): bool {
+	return current_user_can( 'edit_theme_options' );
+}
+
+/**
  * Register the plugin's ability category.
  */
 function mcp_abilities_gutenberg_register_category(): void {
@@ -72,6 +79,22 @@ function mcp_abilities_gutenberg_register_category(): void {
  * @return void
  */
 function mcp_abilities_gutenberg_register_ability( string $name, array $args ): void {
+	if ( isset( $args['output_schema']['properties'] ) && is_array( $args['output_schema']['properties'] ) ) {
+		$args['output_schema']['properties'] = array_merge(
+			array(
+				'success' => array( 'type' => 'boolean' ),
+				'message' => array( 'type' => 'string' ),
+				'code'    => array( 'type' => 'string' ),
+				'issues'  => array(
+					'type'  => 'array',
+					'items' => array( 'type' => array( 'object', 'string' ) ),
+				),
+				'data'    => array( 'type' => array( 'object', 'array', 'string', 'number', 'integer', 'boolean' ) ),
+			),
+			$args['output_schema']['properties']
+		);
+	}
+
 	if ( doing_action( 'wp_abilities_api_init' ) ) {
 		wp_register_ability( $name, $args );
 		return;

@@ -341,10 +341,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$details = mcp_abilities_gutenberg_get_block_details( isset( $input['name'] ) ? (string) $input['name'] : '' );
 				if ( is_wp_error( $details ) ) {
-					return array(
-						'success' => false,
-						'message' => $details->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $details );
 				}
 
 				return array(
@@ -391,10 +388,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$styles = mcp_abilities_gutenberg_get_block_style_variations( isset( $input['name'] ) ? (string) $input['name'] : '' );
 				if ( is_wp_error( $styles ) ) {
-					return array(
-						'success' => false,
-						'message' => $styles->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $styles );
 				}
 
 				return array(
@@ -441,10 +435,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$pattern = mcp_abilities_gutenberg_get_pattern_details( isset( $input['name'] ) ? (string) $input['name'] : '' );
 				if ( is_wp_error( $pattern ) ) {
-					return array(
-						'success' => false,
-						'message' => $pattern->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $pattern );
 				}
 
 				return array(
@@ -528,10 +519,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$pattern = mcp_abilities_gutenberg_get_synced_pattern( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $pattern ) ) {
-					return array(
-						'success' => false,
-						'message' => $pattern->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $pattern );
 				}
 				return array(
 					'success' => true,
@@ -767,10 +755,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$payload = mcp_abilities_gutenberg_generate_landing_page_payload( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $payload ) ) {
-					return array(
-						'success' => false,
-						'message' => $payload->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $payload );
 				}
 
 				return array_merge( array( 'success' => true ), $payload );
@@ -839,10 +824,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_generate_section_payload( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 
 				return array_merge( array( 'success' => true ), $result );
@@ -945,10 +927,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_generate_query_section_payload( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 
 				return array_merge( array( 'success' => true ), $result );
@@ -999,10 +978,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				} elseif ( isset( $input['post_id'] ) ) {
 					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
 					if ( is_wp_error( $post ) ) {
-						return array(
-							'success' => false,
-							'message' => $post->get_error_message(),
-						);
+						return mcp_abilities_gutenberg_error_response( $post );
 					}
 					$content = (string) $post->post_content;
 				} else {
@@ -1064,10 +1040,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				} elseif ( isset( $input['post_id'] ) ) {
 					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
 					if ( is_wp_error( $post ) ) {
-						return array(
-							'success' => false,
-							'message' => $post->get_error_message(),
-						);
+						return mcp_abilities_gutenberg_error_response( $post );
 					}
 					$content = (string) $post->post_content;
 				} else {
@@ -1127,10 +1100,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				} elseif ( isset( $input['post_id'] ) ) {
 					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
 					if ( is_wp_error( $post ) ) {
-						return array(
-							'success' => false,
-							'message' => $post->get_error_message(),
-						);
+						return mcp_abilities_gutenberg_error_response( $post );
 					}
 					$content = (string) $post->post_content;
 				} else {
@@ -1191,10 +1161,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				} elseif ( isset( $input['post_id'] ) ) {
 					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
 					if ( is_wp_error( $post ) ) {
-						return array(
-							'success' => false,
-							'message' => $post->get_error_message(),
-						);
+						return mcp_abilities_gutenberg_error_response( $post );
 					}
 					$content = (string) $post->post_content;
 				} else {
@@ -1255,10 +1222,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				} elseif ( isset( $input['post_id'] ) ) {
 					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
 					if ( is_wp_error( $post ) ) {
-						return array(
-							'success' => false,
-							'message' => $post->get_error_message(),
-						);
+						return mcp_abilities_gutenberg_error_response( $post );
 					}
 					$content = (string) $post->post_content;
 				} else {
@@ -1319,10 +1283,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				} elseif ( isset( $input['post_id'] ) ) {
 					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
 					if ( is_wp_error( $post ) ) {
-						return array(
-							'success' => false,
-							'message' => $post->get_error_message(),
-						);
+						return mcp_abilities_gutenberg_error_response( $post );
 					}
 					$content = (string) $post->post_content;
 				} else {
@@ -1382,10 +1343,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				} elseif ( isset( $input['post_id'] ) ) {
 					$post = mcp_abilities_gutenberg_get_editable_post( (int) $input['post_id'] );
 					if ( is_wp_error( $post ) ) {
-						return array(
-							'success' => false,
-							'message' => $post->get_error_message(),
-						);
+						return mcp_abilities_gutenberg_error_response( $post );
 					}
 					$content = (string) $post->post_content;
 				} else {
@@ -1447,10 +1405,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 
 				$result = mcp_abilities_gutenberg_evaluate_render_context( $post_id );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 
 				return array(
@@ -1548,10 +1503,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$blocks = mcp_abilities_gutenberg_denormalize_blocks( $input['blocks'] ?? null );
 				if ( is_wp_error( $blocks ) ) {
-					return array(
-						'success' => false,
-						'message' => $blocks->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $blocks );
 				}
 
 				$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $blocks );
@@ -1614,10 +1566,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 
 				$post = mcp_abilities_gutenberg_get_editable_post( $post_id );
 				if ( is_wp_error( $post ) ) {
-					return array(
-						'success' => false,
-						'message' => $post->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $post );
 				}
 
 				$content = (string) $post->post_content;
@@ -1715,10 +1664,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$template = mcp_abilities_gutenberg_get_template_entity( 'wp_template', is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $template ) ) {
-					return array(
-						'success' => false,
-						'message' => $template->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $template );
 				}
 
 				return array(
@@ -1813,7 +1759,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_save_template_entity( 'wp_template', is_array( $input ) ? $input : array() );
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
@@ -1864,7 +1810,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_save_template_entity( 'wp_template', is_array( $input ) ? $input : array() );
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
@@ -1906,10 +1852,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$part = mcp_abilities_gutenberg_get_template_entity( 'wp_template_part', is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $part ) ) {
-					return array(
-						'success' => false,
-						'message' => $part->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $part );
 				}
 
 				return array(
@@ -1971,7 +1914,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_save_template_entity( 'wp_template_part', is_array( $input ) ? $input : array() );
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
@@ -2023,7 +1966,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_save_template_entity( 'wp_template_part', is_array( $input ) ? $input : array() );
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
@@ -2099,10 +2042,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$navigation = mcp_abilities_gutenberg_get_navigation_entity( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $navigation ) ) {
-					return array(
-						'success' => false,
-						'message' => $navigation->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $navigation );
 				}
 
 				return array(
@@ -2159,7 +2099,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_save_navigation_entity( is_array( $input ) ? $input : array() );
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
@@ -2209,7 +2149,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_save_navigation_entity( is_array( $input ) ? $input : array() );
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
@@ -2251,10 +2191,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$usage = mcp_abilities_gutenberg_find_navigation_usage( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $usage ) ) {
-					return array(
-						'success' => false,
-						'message' => $usage->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $usage );
 				}
 
 				return array(
@@ -2304,10 +2241,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$usage = mcp_abilities_gutenberg_find_template_part_usage( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $usage ) ) {
-					return array(
-						'success' => false,
-						'message' => $usage->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $usage );
 				}
 
 				return array(
@@ -2357,10 +2291,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$usage = mcp_abilities_gutenberg_find_synced_pattern_usage( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $usage ) ) {
-					return array(
-						'success' => false,
-						'message' => $usage->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $usage );
 				}
 
 				return array(
@@ -2786,10 +2717,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$payload = mcp_abilities_gutenberg_generate_landing_page_payload( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $payload ) ) {
-					return array(
-						'success' => false,
-						'message' => $payload->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $payload );
 				}
 
 				$create  = mcp_abilities_gutenberg_create_page_from_input(
@@ -2924,10 +2852,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_transform_blocks( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -2997,10 +2922,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_mutate_block_tree( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					$response = array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					$response   = mcp_abilities_gutenberg_error_response( $result );
 					$error_data = $result->get_error_data();
 					if ( is_array( $error_data ) && isset( $error_data['render_risks'] ) && is_array( $error_data['render_risks'] ) ) {
 						$response['render_risks'] = $error_data['render_risks'];
@@ -3063,10 +2985,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_set_block_lock( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3120,10 +3039,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_set_allowed_blocks( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3176,10 +3092,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_set_template_lock( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3236,10 +3149,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_insert_inner_block( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3294,10 +3204,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_duplicate_block( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3359,10 +3266,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_move_block( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3421,10 +3325,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_replace_block_text( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3474,10 +3375,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_get_block_bindings( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3530,10 +3428,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_set_block_bindings( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3582,10 +3477,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$result = mcp_abilities_gutenberg_normalize_heading_levels( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 				return array_merge( array( 'success' => true ), $result );
 			},
@@ -3662,18 +3554,12 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 
 				$post = mcp_abilities_gutenberg_get_editable_post( $post_id );
 				if ( is_wp_error( $post ) ) {
-					return array(
-						'success' => false,
-						'message' => $post->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $post );
 				}
 
 				$content = mcp_abilities_gutenberg_build_editor_safe_content_from_input( is_array( $input ) ? $input : array() );
 				if ( is_wp_error( $content ) ) {
-					return array(
-						'success' => false,
-						'message' => $content->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $content );
 				}
 
 				$update_args = array(
@@ -3695,10 +3581,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'Post updated successfully.'
 				);
 				if ( is_wp_error( $result ) ) {
-					return array(
-						'success' => false,
-						'message' => $result->get_error_message(),
-					);
+					return mcp_abilities_gutenberg_error_response( $result );
 				}
 
 				return $result;

@@ -8,7 +8,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.13
+**Stable tag:** 0.20.14
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -245,6 +245,11 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.14
+- Improved ability error responses so WordPress error codes, issue lists, and structured error data are preserved instead of returning message-only failures.
+- Improved all ability output schemas so they include the shared error fields used by Gutenberg write and generation gates.
+- Hardened site-editor template, template-part, and navigation write abilities so they require `edit_theme_options` at the ability permission layer.
 
 ### 0.20.13
 - Refactored the block-editor implementation into focused include modules for core block handling, catalogs/site editor data, content analysis, block mutations, generation, and ability registration. No MCP ability names changed.

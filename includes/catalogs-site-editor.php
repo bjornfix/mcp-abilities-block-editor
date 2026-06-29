@@ -364,18 +364,12 @@ function mcp_abilities_gutenberg_save_template_entity( string $post_type, array 
 
 	$content = mcp_abilities_gutenberg_build_editor_safe_content_from_input( $input );
 	if ( is_wp_error( $content ) ) {
-		return array(
-			'success' => false,
-			'message' => $content->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $content );
 	}
 
 	$write_guard = mcp_abilities_gutenberg_assert_block_document_write_safe( $content, $input );
 	if ( is_wp_error( $write_guard ) ) {
-		return array(
-			'success' => false,
-			'message' => $write_guard->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $write_guard );
 	}
 
 	$title  = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : 'Untitled';
@@ -409,10 +403,7 @@ function mcp_abilities_gutenberg_save_template_entity( string $post_type, array 
 	}
 
 	if ( is_wp_error( $result ) ) {
-		return array(
-			'success' => false,
-			'message' => $result->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $result );
 	}
 
 	if ( '' !== $theme ) {
@@ -530,18 +521,12 @@ function mcp_abilities_gutenberg_get_synced_pattern( array $input ) {
 function mcp_abilities_gutenberg_save_synced_pattern( array $input ): array {
 	$content = mcp_abilities_gutenberg_build_editor_safe_content_from_input( $input );
 	if ( is_wp_error( $content ) ) {
-		return array(
-			'success' => false,
-			'message' => $content->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $content );
 	}
 
 	$write_guard = mcp_abilities_gutenberg_assert_block_document_write_safe( $content, $input );
 	if ( is_wp_error( $write_guard ) ) {
-		return array(
-			'success' => false,
-			'message' => $write_guard->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $write_guard );
 	}
 
 	$title   = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : 'Untitled Synced Pattern';
@@ -573,10 +558,7 @@ function mcp_abilities_gutenberg_save_synced_pattern( array $input ): array {
 	}
 
 	if ( is_wp_error( $result ) ) {
-		return array(
-			'success' => false,
-			'message' => $result->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $result );
 	}
 
 	$saved = get_post( $post_id );
@@ -606,10 +588,7 @@ function mcp_abilities_gutenberg_save_synced_pattern( array $input ): array {
 function mcp_abilities_gutenberg_extract_synced_pattern( array $input ): array {
 	$path = mcp_abilities_gutenberg_normalize_block_path( $input['path'] ?? null );
 	if ( is_wp_error( $path ) ) {
-		return array(
-			'success' => false,
-			'message' => $path->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $path );
 	}
 
 	$post_id = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
@@ -617,29 +596,20 @@ function mcp_abilities_gutenberg_extract_synced_pattern( array $input ): array {
 	if ( $post_id > 0 ) {
 		$post = mcp_abilities_gutenberg_get_editable_post( $post_id );
 		if ( is_wp_error( $post ) ) {
-			return array(
-				'success' => false,
-				'message' => $post->get_error_message(),
-			);
+			return mcp_abilities_gutenberg_error_response( $post );
 		}
 		$normalized = mcp_abilities_gutenberg_normalize_blocks( parse_blocks( (string) $post->post_content ) );
 	} else {
 		$blocks = mcp_abilities_gutenberg_denormalize_blocks( $input['blocks'] ?? null );
 		if ( is_wp_error( $blocks ) ) {
-			return array(
-				'success' => false,
-				'message' => $blocks->get_error_message(),
-			);
+			return mcp_abilities_gutenberg_error_response( $blocks );
 		}
 		$normalized = mcp_abilities_gutenberg_normalize_blocks( $blocks );
 	}
 
 	$target_block = mcp_abilities_gutenberg_get_block_by_path( $normalized, $path );
 	if ( is_wp_error( $target_block ) ) {
-		return array(
-			'success' => false,
-			'message' => $target_block->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $target_block );
 	}
 
 	$save = mcp_abilities_gutenberg_save_synced_pattern(
@@ -674,18 +644,12 @@ function mcp_abilities_gutenberg_extract_synced_pattern( array $input ): array {
 		);
 
 		if ( is_wp_error( $mutated ) ) {
-			return array(
-				'success' => false,
-				'message' => $mutated->get_error_message(),
-			);
+			return mcp_abilities_gutenberg_error_response( $mutated );
 		}
 
 		$denormalized = mcp_abilities_gutenberg_denormalize_blocks( $mutated );
 		if ( is_wp_error( $denormalized ) ) {
-			return array(
-				'success' => false,
-				'message' => $denormalized->get_error_message(),
-			);
+			return mcp_abilities_gutenberg_error_response( $denormalized );
 		}
 
 		$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
@@ -699,10 +663,7 @@ function mcp_abilities_gutenberg_extract_synced_pattern( array $input ): array {
 				false
 			);
 			if ( is_wp_error( $result ) ) {
-				return array(
-					'success' => false,
-					'message' => $result->get_error_message(),
-				);
+				return mcp_abilities_gutenberg_error_response( $result );
 			}
 		}
 	}
@@ -745,10 +706,7 @@ function mcp_abilities_gutenberg_insert_synced_pattern_into_post( array $input )
 	$post_id = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
 	$post    = mcp_abilities_gutenberg_get_editable_post( $post_id );
 	if ( is_wp_error( $post ) ) {
-		return array(
-			'success' => false,
-			'message' => $post->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $post );
 	}
 
 	$pattern_input = array();
@@ -761,19 +719,13 @@ function mcp_abilities_gutenberg_insert_synced_pattern_into_post( array $input )
 
 	$pattern = mcp_abilities_gutenberg_get_synced_pattern( $pattern_input );
 	if ( is_wp_error( $pattern ) ) {
-		return array(
-			'success' => false,
-			'message' => $pattern->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $pattern );
 	}
 
 	$normalized = mcp_abilities_gutenberg_normalize_blocks( parse_blocks( (string) $post->post_content ) );
 	$parent     = isset( $input['parent_path'] ) ? mcp_abilities_gutenberg_normalize_block_path( $input['parent_path'] ) : array();
 	if ( is_wp_error( $parent ) ) {
-		return array(
-			'success' => false,
-			'message' => $parent->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $parent );
 	}
 
 	$position = isset( $input['position'] ) ? (int) $input['position'] : PHP_INT_MAX;
@@ -787,18 +739,12 @@ function mcp_abilities_gutenberg_insert_synced_pattern_into_post( array $input )
 
 	$mutated = mcp_abilities_gutenberg_insert_block_at_path( $normalized, $parent, $ref_block, $position );
 	if ( is_wp_error( $mutated ) ) {
-		return array(
-			'success' => false,
-			'message' => $mutated->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $mutated );
 	}
 
 	$denormalized = mcp_abilities_gutenberg_denormalize_blocks( $mutated );
 	if ( is_wp_error( $denormalized ) ) {
-		return array(
-			'success' => false,
-			'message' => $denormalized->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $denormalized );
 	}
 
 	$content = mcp_abilities_gutenberg_serialize_blocks_for_editor( $denormalized );
@@ -810,10 +756,7 @@ function mcp_abilities_gutenberg_insert_synced_pattern_into_post( array $input )
 		'Synced pattern reference inserted successfully.'
 	);
 	if ( is_wp_error( $result ) ) {
-		return array(
-			'success' => false,
-			'message' => $result->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $result );
 	}
 
 	$result['pattern'] = $pattern;
@@ -922,18 +865,12 @@ function mcp_abilities_gutenberg_save_navigation_entity( array $input ): array {
 
 	$content = mcp_abilities_gutenberg_build_editor_safe_content_from_input( $input );
 	if ( is_wp_error( $content ) ) {
-		return array(
-			'success' => false,
-			'message' => $content->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $content );
 	}
 
 	$write_guard = mcp_abilities_gutenberg_assert_block_document_write_safe( $content, $input );
 	if ( is_wp_error( $write_guard ) ) {
-		return array(
-			'success' => false,
-			'message' => $write_guard->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $write_guard );
 	}
 
 	$title   = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : 'Untitled Navigation';
@@ -965,10 +902,7 @@ function mcp_abilities_gutenberg_save_navigation_entity( array $input ): array {
 	}
 
 	if ( is_wp_error( $result ) ) {
-		return array(
-			'success' => false,
-			'message' => $result->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $result );
 	}
 
 	$saved = get_post( $post_id );

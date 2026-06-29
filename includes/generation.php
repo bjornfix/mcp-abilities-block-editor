@@ -910,10 +910,7 @@ function mcp_abilities_gutenberg_generate_landing_page_payload( array $input ) {
 function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 	$content = mcp_abilities_gutenberg_build_editor_safe_content_from_input( $input );
 	if ( is_wp_error( $content ) ) {
-		return array(
-			'success' => false,
-			'message' => $content->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $content );
 	}
 
 	$title = isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : 'Untitled Page';
@@ -939,10 +936,7 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 		);
 
 		if ( is_wp_error( $update_result ) ) {
-			return array(
-				'success' => false,
-				'message' => $update_result->get_error_message(),
-			);
+			return mcp_abilities_gutenberg_error_response( $update_result );
 		}
 
 		return $update_result;
@@ -950,10 +944,7 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 
 	$write_guard = mcp_abilities_gutenberg_assert_block_document_write_safe( $content, $input );
 	if ( is_wp_error( $write_guard ) ) {
-		return array(
-			'success' => false,
-			'message' => $write_guard->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $write_guard );
 	}
 
 	$parent_id   = 0;
@@ -973,10 +964,7 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 	);
 
 	if ( is_wp_error( $post_id ) ) {
-		return array(
-			'success' => false,
-			'message' => $post_id->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $post_id );
 	}
 
 	$post = get_post( (int) $post_id );
@@ -1010,10 +998,7 @@ function mcp_abilities_gutenberg_create_page_from_pattern( array $input ): array
 	$pattern      = mcp_abilities_gutenberg_get_pattern_details( $pattern_name );
 
 	if ( is_wp_error( $pattern ) ) {
-		return array(
-			'success' => false,
-			'message' => $pattern->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $pattern );
 	}
 
 	$create = mcp_abilities_gutenberg_create_page_from_input(
@@ -1047,18 +1032,12 @@ function mcp_abilities_gutenberg_insert_pattern_into_post( array $input ): array
 
 	$post = mcp_abilities_gutenberg_get_editable_post( $post_id );
 	if ( is_wp_error( $post ) ) {
-		return array(
-			'success' => false,
-			'message' => $post->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $post );
 	}
 
 	$pattern = mcp_abilities_gutenberg_get_pattern_details( $pattern_name );
 	if ( is_wp_error( $pattern ) ) {
-		return array(
-			'success' => false,
-			'message' => $pattern->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $pattern );
 	}
 
 	$existing_content = (string) $post->post_content;
@@ -1082,10 +1061,7 @@ function mcp_abilities_gutenberg_insert_pattern_into_post( array $input ): array
 		'Pattern inserted successfully.'
 	);
 	if ( is_wp_error( $result ) ) {
-		return array(
-			'success' => false,
-			'message' => $result->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $result );
 	}
 
 	return $result;
@@ -1103,10 +1079,7 @@ function mcp_abilities_gutenberg_set_post_featured_media( array $input ): array 
 
 	$post = mcp_abilities_gutenberg_get_editable_post( $post_id );
 	if ( is_wp_error( $post ) ) {
-		return array(
-			'success' => false,
-			'message' => $post->get_error_message(),
-		);
+		return mcp_abilities_gutenberg_error_response( $post );
 	}
 
 	if ( $attachment_id <= 0 || 'attachment' !== get_post_type( $attachment_id ) ) {
