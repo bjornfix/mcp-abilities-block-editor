@@ -257,8 +257,8 @@ function mcp_abilities_gutenberg_generate_query_section_payload( array $input ) 
 				. mcp_abilities_gutenberg_paragraph_block( $intro )
 				. '<!-- wp:query ' . wp_json_encode( $query_block_attrs ) . ' --><div class="wp-block-query">'
 				. '<!-- wp:post-template {"layout":{"type":"grid","columnCount":' . (int) $query_block_attrs['displayLayout']['columns'] . '}} -->'
-				. '<!-- wp:group {"style":{"spacing":{"blockGap":"0.9rem","padding":{"top":"1.1rem","right":"1.1rem","bottom":"1.1rem","left":"1.1rem"}},"border":{"radius":"18px"}},"backgroundColor":"base-2","layout":{"type":"constrained"}} --><div class="wp-block-group has-base-2-background-color has-background" style="border-radius:18px;padding-top:1.1rem;padding-right:1.1rem;padding-bottom:1.1rem;padding-left:1.1rem">'
-				. '<!-- wp:post-featured-image {"isLink":true,"aspectRatio":"4/3","style":{"border":{"radius":"14px"}}} /-->'
+				. '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
+				. '<!-- wp:post-featured-image {"isLink":true,"aspectRatio":"4/3"} /-->'
 				. '<!-- wp:post-title {"level":3,"isLink":true} /-->'
 				. '<!-- wp:post-excerpt {"moreText":"Continue reading"} /-->'
 				. '<!-- wp:read-more {"content":"Read story"} /-->'
@@ -284,7 +284,7 @@ function mcp_abilities_gutenberg_generate_query_section_payload( array $input ) 
 				. mcp_abilities_gutenberg_paragraph_block( $intro )
 				. '<!-- wp:query ' . wp_json_encode( $query_block_attrs ) . ' --><div class="wp-block-query">'
 				. '<!-- wp:post-template {"layout":{"type":"default"}} -->'
-				. '<!-- wp:group {"style":{"spacing":{"blockGap":"0.6rem","padding":{"top":"0.9rem","bottom":"0.9rem"}},"border":{"bottom":{"color":"var:preset|color|contrast-3","width":"1px"}}},"layout":{"type":"constrained"}} --><div class="wp-block-group" style="border-bottom-color:var(--wp--preset--color--contrast-3);border-bottom-width:1px;padding-top:0.9rem;padding-bottom:0.9rem">'
+				. '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
 				. '<!-- wp:post-title {"level":3,"isLink":true} /-->'
 				. '<!-- wp:post-date /-->'
 				. '<!-- wp:post-excerpt {"moreText":"Continue reading"} /-->'
@@ -314,8 +314,8 @@ function mcp_abilities_gutenberg_generate_query_section_payload( array $input ) 
 				. mcp_abilities_gutenberg_paragraph_block( $intro )
 				. '<!-- wp:query ' . wp_json_encode( $query_block_attrs ) . ' --><div class="wp-block-query">'
 				. '<!-- wp:post-template {"layout":{"type":"grid","columnCount":2}} -->'
-				. '<!-- wp:columns {"verticalAlignment":"top","style":{"spacing":{"blockGap":"1.2rem","padding":{"top":"1rem","bottom":"1rem"}},"border":{"bottom":{"color":"var:preset|color|contrast-3","width":"1px"}}}} --><div class="wp-block-columns are-vertically-aligned-top" style="border-bottom-color:var(--wp--preset--color--contrast-3);border-bottom-width:1px;padding-top:1rem;padding-bottom:1rem">'
-				. '<!-- wp:column {"verticalAlignment":"top","width":"40%"} --><div class="wp-block-column is-vertically-aligned-top" style="flex-basis:40%"><!-- wp:post-featured-image {"isLink":true,"aspectRatio":"3/2","style":{"border":{"radius":"16px"}}} /--></div><!-- /wp:column -->'
+				. '<!-- wp:columns {"verticalAlignment":"top"} --><div class="wp-block-columns are-vertically-aligned-top">'
+				. '<!-- wp:column {"verticalAlignment":"top","width":"40%"} --><div class="wp-block-column is-vertically-aligned-top" style="flex-basis:40%"><!-- wp:post-featured-image {"isLink":true,"aspectRatio":"3/2"} /--></div><!-- /wp:column -->'
 				. '<!-- wp:column {"verticalAlignment":"top","width":"60%"} --><div class="wp-block-column is-vertically-aligned-top" style="flex-basis:60%">'
 				. '<!-- wp:post-terms {"term":"category"} /-->'
 				. '<!-- wp:post-title {"level":3,"isLink":true} /-->'
@@ -361,11 +361,11 @@ function mcp_abilities_gutenberg_generate_section_payload( array $input ) {
 
 	switch ( $section ) {
 		case 'hero':
-			$content = '<!-- wp:group {"style":{"spacing":{"padding":{"top":"4rem","bottom":"4rem","left":"min(6vw,4rem)","right":"min(6vw,4rem)"},"blockGap":"1rem"},"color":{"gradient":"linear-gradient(135deg,rgb(24,18,16) 0%,rgb(70,46,33) 42%,rgb(198,150,93) 100%)"}},"textColor":"base","layout":{"type":"constrained"}} --><div class="wp-block-group has-base-color has-text-color has-background" style="background:linear-gradient(135deg,rgb(24,18,16) 0%,rgb(70,46,33) 42%,rgb(198,150,93) 100%);padding-top:4rem;padding-right:min(6vw,4rem);padding-bottom:4rem;padding-left:min(6vw,4rem)">'
-				. mcp_abilities_gutenberg_paragraph_block( $eyebrow, array( 'fontSize' => 'small' ) )
+			$content = '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
+				. mcp_abilities_gutenberg_paragraph_block( $eyebrow )
 				. mcp_abilities_gutenberg_heading_block( $title, 1 )
 				. mcp_abilities_gutenberg_paragraph_block( $body )
-				. '<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
+				. mcp_abilities_gutenberg_buttons_block( $cta )
 				. '</div><!-- /wp:group -->';
 			break;
 
@@ -404,10 +404,10 @@ function mcp_abilities_gutenberg_generate_section_payload( array $input ) {
 			break;
 
 		case 'final-cta':
-			$content = '<!-- wp:group {"backgroundColor":"base-2","style":{"spacing":{"padding":{"top":"3rem","bottom":"3rem","left":"min(6vw,4rem)","right":"min(6vw,4rem)"},"blockGap":"1rem"}},"layout":{"type":"constrained"}} --><div class="wp-block-group has-base-2-background-color has-background" style="padding-top:3rem;padding-right:min(6vw,4rem);padding-bottom:3rem;padding-left:min(6vw,4rem)">'
+			$content = '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
 				. mcp_abilities_gutenberg_heading_block( $title, 2 )
 				. mcp_abilities_gutenberg_paragraph_block( $body )
-				. '<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
+				. mcp_abilities_gutenberg_buttons_block( $cta )
 				. '</div><!-- /wp:group -->';
 			break;
 
@@ -415,11 +415,11 @@ function mcp_abilities_gutenberg_generate_section_payload( array $input ) {
 			$columns = '';
 			foreach ( array_slice( $items, 0, 3 ) as $index => $item ) {
 				$price = '$' . (string) ( 12 + ( $index * 8 ) );
-				$columns .= '<!-- wp:column --><div class="wp-block-column"><!-- wp:group {"style":{"spacing":{"padding":{"top":"1.5rem","right":"1.5rem","bottom":"1.5rem","left":"1.5rem"},"blockGap":"0.75rem"},"border":{"radius":"18px","width":"1px"}},"layout":{"type":"constrained"}} --><div class="wp-block-group" style="border-width:1px;border-radius:18px;padding-top:1.5rem;padding-right:1.5rem;padding-bottom:1.5rem;padding-left:1.5rem">'
+				$columns .= '<!-- wp:column --><div class="wp-block-column"><!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
 					. mcp_abilities_gutenberg_heading_block( $item, 3 )
-					. mcp_abilities_gutenberg_paragraph_block( $price, array( 'fontSize' => 'large' ) )
-					. '<!-- wp:list --><ul><li>' . esc_html( $body ) . '</li><li>Flexible package details</li><li>Clear next step</li></ul><!-- /wp:list -->'
-					. '<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
+					. mcp_abilities_gutenberg_paragraph_block( $price )
+					. mcp_abilities_gutenberg_list_block( array( $body, 'Package details', 'Clear next step' ) )
+					. mcp_abilities_gutenberg_buttons_block( $cta )
 					. '</div><!-- /wp:group --></div><!-- /wp:column -->';
 			}
 			$content = '<!-- wp:group {"layout":{"type":"constrained"},"style":{"spacing":{"blockGap":"1rem"}}} --><div class="wp-block-group">'
@@ -432,7 +432,7 @@ function mcp_abilities_gutenberg_generate_section_payload( array $input ) {
 		case 'team':
 			$columns = '';
 			foreach ( array_slice( $items, 0, 4 ) as $member ) {
-				$columns .= '<!-- wp:column --><div class="wp-block-column"><!-- wp:group {"style":{"spacing":{"padding":{"top":"1.25rem","right":"1.25rem","bottom":"1.25rem","left":"1.25rem"},"blockGap":"0.5rem"},"border":{"radius":"16px"}},"backgroundColor":"base-2","layout":{"type":"constrained"}} --><div class="wp-block-group has-base-2-background-color has-background" style="border-radius:16px;padding-top:1.25rem;padding-right:1.25rem;padding-bottom:1.25rem;padding-left:1.25rem">'
+				$columns .= '<!-- wp:column --><div class="wp-block-column"><!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
 					. mcp_abilities_gutenberg_heading_block( $member, 3 )
 					. mcp_abilities_gutenberg_paragraph_block( 'Role or specialty' )
 					. mcp_abilities_gutenberg_paragraph_block( $body )
@@ -471,9 +471,11 @@ function mcp_abilities_gutenberg_generate_section_payload( array $input ) {
 			$content = '<!-- wp:columns {"verticalAlignment":"top"} --><div class="wp-block-columns are-vertically-aligned-top"><!-- wp:column {"verticalAlignment":"top"} --><div class="wp-block-column is-vertically-aligned-top">'
 				. mcp_abilities_gutenberg_heading_block( $title, 2 )
 				. mcp_abilities_gutenberg_paragraph_block( $body )
-				. '<!-- wp:list --><ul><li>Address line placeholder</li><li>Opening hours placeholder</li><li>Phone or email placeholder</li></ul><!-- /wp:list -->'
-				. '<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
-				. '</div><!-- /wp:column --><!-- wp:column {"verticalAlignment":"top"} --><div class="wp-block-column is-vertically-aligned-top"><!-- wp:embed {"providerNameSlug":"wordpress","responsive":true,"className":"is-provider-wordpress wp-block-embed is-provider-wordpress is-type-rich is-responsive"} --><figure class="wp-block-embed is-provider-wordpress wp-block-embed is-type-rich is-responsive"><div class="wp-block-embed__wrapper">https://maps.example.com/location-placeholder</div></figure><!-- /wp:embed --></div><!-- /wp:column --></div><!-- /wp:columns -->';
+				. mcp_abilities_gutenberg_list_block( array( 'Address line', 'Opening hours', 'Phone or email' ) )
+				. mcp_abilities_gutenberg_buttons_block( $cta )
+				. '</div><!-- /wp:column --><!-- wp:column {"verticalAlignment":"top"} --><div class="wp-block-column is-vertically-aligned-top">'
+				. mcp_abilities_gutenberg_paragraph_block( 'Add a map, directions, or service-area details here.' )
+				. '</div><!-- /wp:column --></div><!-- /wp:columns -->';
 			break;
 
 		default:
@@ -733,9 +735,9 @@ function mcp_abilities_gutenberg_get_page_recipes(): array {
 function mcp_abilities_gutenberg_build_landing_page_blueprint( array $input ): array {
 	$business_name = isset( $input['business_name'] ) ? (string) $input['business_name'] : 'Local Business';
 	$industry      = isset( $input['industry'] ) ? (string) $input['industry'] : 'business';
-	$tone          = isset( $input['tone'] ) ? (string) $input['tone'] : 'warm, premium, and confident';
-	$cta_primary   = isset( $input['primary_cta_text'] ) ? (string) $input['primary_cta_text'] : 'Order Today';
-	$cta_secondary = isset( $input['secondary_cta_text'] ) ? (string) $input['secondary_cta_text'] : 'View Menu';
+	$tone          = isset( $input['tone'] ) ? (string) $input['tone'] : 'clear, useful, and confident';
+	$cta_primary   = isset( $input['primary_cta_text'] ) ? (string) $input['primary_cta_text'] : 'Get Started';
+	$cta_secondary = isset( $input['secondary_cta_text'] ) ? (string) $input['secondary_cta_text'] : 'See Details';
 
 	return array(
 		'business_name' => $business_name,
@@ -816,6 +818,41 @@ function mcp_abilities_gutenberg_paragraph_block( string $content, array $attrs 
 }
 
 /**
+ * Build a buttons block with one or two plain button labels.
+ *
+ * @param string      $primary Primary button label.
+ * @param string|null $secondary Optional secondary button label.
+ * @return string
+ */
+function mcp_abilities_gutenberg_buttons_block( string $primary, ?string $secondary = null ): string {
+	$buttons = '<!-- wp:button --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button">' . esc_html( $primary ) . '</a></div><!-- /wp:button -->';
+
+	if ( null !== $secondary && '' !== trim( $secondary ) ) {
+		$buttons .= '<!-- wp:button {"className":"is-style-outline"} --><div class="wp-block-button is-style-outline"><a class="wp-block-button__link wp-element-button">' . esc_html( $secondary ) . '</a></div><!-- /wp:button -->';
+	}
+
+	return '<!-- wp:buttons {"layout":{"type":"flex","justifyContent":"left"}} --><div class="wp-block-buttons">' . $buttons . '</div><!-- /wp:buttons -->';
+}
+
+/**
+ * Build a plain list block.
+ *
+ * @param array<int,string> $items List items.
+ * @param bool              $ordered Whether to output an ordered list.
+ * @return string
+ */
+function mcp_abilities_gutenberg_list_block( array $items, bool $ordered = false ): string {
+	$tag  = $ordered ? 'ol' : 'ul';
+	$list = '';
+
+	foreach ( $items as $item ) {
+		$list .= '<li>' . wp_kses_post( $item ) . '</li>';
+	}
+
+	return '<!-- wp:list' . ( $ordered ? ' {"ordered":true}' : '' ) . ' --><' . $tag . '>' . $list . '</' . $tag . '><!-- /wp:list -->';
+}
+
+/**
  * Generate landing page block content.
  *
  * @param array<string,mixed> $input Input data.
@@ -824,14 +861,14 @@ function mcp_abilities_gutenberg_paragraph_block( string $content, array $attrs 
 function mcp_abilities_gutenberg_generate_landing_page_payload( array $input ) {
 	$business_name = isset( $input['business_name'] ) ? trim( (string) $input['business_name'] ) : 'Local Business';
 	$industry      = isset( $input['industry'] ) ? trim( (string) $input['industry'] ) : 'business';
-	$tone          = isset( $input['tone'] ) ? trim( (string) $input['tone'] ) : 'warm, premium, and confident';
+	$tone          = isset( $input['tone'] ) ? trim( (string) $input['tone'] ) : 'clear, useful, and confident';
 	$slug          = isset( $input['slug'] ) ? sanitize_title( (string) $input['slug'] ) : sanitize_title( $business_name );
-	$primary_cta   = isset( $input['primary_cta_text'] ) ? trim( (string) $input['primary_cta_text'] ) : 'Order Today';
-	$secondary_cta = isset( $input['secondary_cta_text'] ) ? trim( (string) $input['secondary_cta_text'] ) : 'View Menu';
+	$primary_cta   = isset( $input['primary_cta_text'] ) ? trim( (string) $input['primary_cta_text'] ) : 'Get Started';
+	$secondary_cta = isset( $input['secondary_cta_text'] ) ? trim( (string) $input['secondary_cta_text'] ) : 'See Details';
 	$offerings     = isset( $input['offerings'] ) && is_array( $input['offerings'] ) ? array_values( array_filter( array_map( 'strval', $input['offerings'] ) ) ) : array(
-		'Slow-fermented sourdough',
-		'Butter-rich laminated pastries',
-		'Seasonal cakes and weekend treats',
+		'Primary offer',
+		'Support option',
+		'Next-step consultation',
 	);
 
 	$blueprint = mcp_abilities_gutenberg_build_landing_page_blueprint(
@@ -846,47 +883,62 @@ function mcp_abilities_gutenberg_generate_landing_page_payload( array $input ) {
 
 	$offer_columns = '';
 	foreach ( array_slice( $offerings, 0, 3 ) as $offering ) {
-		$offer_columns .= '<!-- wp:column --><div class="wp-block-column"><!-- wp:group {"style":{"spacing":{"blockGap":"0.75rem","padding":{"top":"1.5rem","right":"1.5rem","bottom":"1.5rem","left":"1.5rem"}},"border":{"radius":"18px"}},"backgroundColor":"base-2","layout":{"type":"constrained"}} --><div class="wp-block-group has-base-2-background-color has-background" style="border-radius:18px;padding-top:1.5rem;padding-right:1.5rem;padding-bottom:1.5rem;padding-left:1.5rem">'
+		$offer_columns .= '<!-- wp:column --><div class="wp-block-column"><!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
 			. mcp_abilities_gutenberg_heading_block( $offering, 3 )
-			. mcp_abilities_gutenberg_paragraph_block( 'Made in small batches with a focus on texture, aroma, and a clean finish.' )
+			. mcp_abilities_gutenberg_paragraph_block( 'Describe the concrete outcome, who it helps, and what the visitor should understand next.' )
 			. '</div><!-- /wp:group --></div><!-- /wp:column -->';
 	}
 
-	$content  = '<!-- wp:group {"style":{"spacing":{"padding":{"top":"5rem","bottom":"5rem","left":"min(6vw,4rem)","right":"min(6vw,4rem)"},"blockGap":"1.5rem"},"color":{"gradient":"linear-gradient(135deg,rgb(24,18,16) 0%,rgb(70,46,33) 42%,rgb(198,150,93) 100%)"}},"textColor":"base","layout":{"type":"constrained"}} --><div class="wp-block-group has-base-color has-text-color has-background" style="background:linear-gradient(135deg,rgb(24,18,16) 0%,rgb(70,46,33) 42%,rgb(198,150,93) 100%);padding-top:5rem;padding-right:min(6vw,4rem);padding-bottom:5rem;padding-left:min(6vw,4rem)">'
-		. mcp_abilities_gutenberg_paragraph_block( 'Bakes worth planning your morning around', array( 'fontSize' => 'small' ) )
-		. mcp_abilities_gutenberg_heading_block( $business_name, 1, array( 'style' => array( 'typography' => array( 'fontSize' => 'clamp(3rem,8vw,6.5rem)', 'lineHeight' => '0.95' ) ) ) )
-		. mcp_abilities_gutenberg_paragraph_block( esc_html( $business_name ) . ' is a ' . esc_html( $tone ) . ' ' . esc_html( $industry ) . ' brand built around early ovens, crisp crusts, and pastries that feel like an event, not an afterthought.', array( 'style' => array( 'typography' => array( 'fontSize' => '1.15rem' ) ) ) )
-		. '<!-- wp:buttons {"layout":{"type":"flex","justifyContent":"left"}} --><div class="wp-block-buttons"><!-- wp:button {"backgroundColor":"base","textColor":"contrast","style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link has-contrast-color has-base-background-color has-text-color has-background wp-element-button" style="border-radius:999px">' . esc_html( $primary_cta ) . '</a></div><!-- /wp:button --><!-- wp:button {"className":"is-style-outline","style":{"border":{"radius":"999px"}}} --><div class="wp-block-button is-style-outline"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $secondary_cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
+	$content  = '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
+		. mcp_abilities_gutenberg_paragraph_block( $industry )
+		. mcp_abilities_gutenberg_heading_block( $business_name, 1 )
+		. mcp_abilities_gutenberg_paragraph_block( $business_name . ' presents a ' . $tone . ' offer for people who need a clear reason to choose the next step.' )
+		. mcp_abilities_gutenberg_buttons_block( $primary_cta, $secondary_cta )
 		. '</div><!-- /wp:group -->';
 
 	$content .= '<!-- wp:spacer {"height":"48px"} --><div style="height:48px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
-	$content .= '<!-- wp:group {"layout":{"type":"constrained"},"style":{"spacing":{"blockGap":"1.5rem","padding":{"left":"min(6vw,4rem)","right":"min(6vw,4rem)"}}}} --><div class="wp-block-group" style="padding-right:min(6vw,4rem);padding-left:min(6vw,4rem)">'
-		. mcp_abilities_gutenberg_heading_block( 'What to come in for first', 2 )
-		. mcp_abilities_gutenberg_paragraph_block( 'A sleek landing page still needs fast scanning. This section keeps the offer concrete before the copy gets romantic.' )
+	$content .= '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
+		. mcp_abilities_gutenberg_heading_block( 'What you get', 2 )
+		. mcp_abilities_gutenberg_paragraph_block( 'Use this section to make the offer concrete before adding detail. Each item should carry a distinct reason to keep reading.' )
 		. '<!-- wp:columns {"style":{"spacing":{"blockGap":"1.25rem"}}} --><div class="wp-block-columns">' . $offer_columns . '</div><!-- /wp:columns -->'
 		. '</div><!-- /wp:group -->';
 
 	$content .= '<!-- wp:spacer {"height":"56px"} --><div style="height:56px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
-	$content .= '<!-- wp:group {"backgroundColor":"base-2","style":{"spacing":{"padding":{"top":"3rem","right":"min(6vw,4rem)","bottom":"3rem","left":"min(6vw,4rem)"},"blockGap":"1.25rem"}},"layout":{"type":"constrained"}} --><div class="wp-block-group has-base-2-background-color has-background" style="padding-top:3rem;padding-right:min(6vw,4rem);padding-bottom:3rem;padding-left:min(6vw,4rem)">'
-		. mcp_abilities_gutenberg_heading_block( 'Why people remember ' . $business_name, 2 )
-		. '<!-- wp:list --><ul><li>Small-batch baking that feels deliberate instead of industrial.</li><li>A product mix built for daily bread, weekend pastries, and impulse dessert runs.</li><li>Warm visual identity and copy that can flex between neighborhood charm and premium positioning.</li></ul><!-- /wp:list -->'
+	$content .= '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
+		. mcp_abilities_gutenberg_heading_block( 'Why people choose ' . $business_name, 2 )
+		. mcp_abilities_gutenberg_list_block(
+			array(
+				'A clear promise that matches the visitor’s immediate problem.',
+				'Specific proof points that make the promise easier to believe.',
+				'A focused path from interest to action without unnecessary choices.',
+			)
+		)
 		. '</div><!-- /wp:group -->';
 
 	$content .= '<!-- wp:spacer {"height":"56px"} --><div style="height:56px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
-	$content .= '<!-- wp:columns {"style":{"spacing":{"blockGap":"2rem","padding":{"left":"min(6vw,4rem)","right":"min(6vw,4rem)"}}}} --><div class="wp-block-columns" style="padding-right:min(6vw,4rem);padding-left:min(6vw,4rem)"><!-- wp:column --><div class="wp-block-column">'
-		. mcp_abilities_gutenberg_heading_block( 'Baked before sunrise', 2 )
-		. mcp_abilities_gutenberg_paragraph_block( 'This section gives the brand a pulse. It is where the page stops sounding generic and starts sounding lived-in.' )
-		. '</div><!-- /wp:column --><!-- wp:column --><div class="wp-block-column"><!-- wp:list {"ordered":true} --><ol><li>Mix and proof dough slowly for flavor first.</li><li>Bake in tight daily batches so the page promise stays believable.</li><li>Present the counter like a curated collection, not a pile of products.</li></ol><!-- /wp:list --></div><!-- /wp:column --></div><!-- /wp:columns -->';
+	$content .= '<!-- wp:columns {"style":{"spacing":{"blockGap":"2rem"}}} --><div class="wp-block-columns"><!-- wp:column --><div class="wp-block-column">'
+		. mcp_abilities_gutenberg_heading_block( 'How it works', 2 )
+		. mcp_abilities_gutenberg_paragraph_block( 'Use this section to explain the route from first contact to outcome. Keep it practical and easy to scan.' )
+		. '</div><!-- /wp:column --><!-- wp:column --><div class="wp-block-column">'
+		. mcp_abilities_gutenberg_list_block(
+			array(
+				'Clarify the need and the best-fit option.',
+				'Agree on the next step and what success looks like.',
+				'Deliver the work with clear checkpoints and a visible result.',
+			),
+			true
+		)
+		. '</div><!-- /wp:column --></div><!-- /wp:columns -->';
 
 	$content .= '<!-- wp:spacer {"height":"48px"} --><div style="height:48px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
-	$content .= '<!-- wp:quote {"className":"is-style-large","style":{"spacing":{"padding":{"left":"min(6vw,4rem)","right":"min(6vw,4rem)"}}}} --><blockquote class="wp-block-quote is-style-large" style="padding-right:min(6vw,4rem);padding-left:min(6vw,4rem)"><p>The kind of bakery that makes one loaf feel like a plan for the whole day.</p><cite>Suggested testimonial placeholder</cite></blockquote><!-- /wp:quote -->';
+	$content .= '<!-- wp:quote {"className":"is-style-large"} --><blockquote class="wp-block-quote is-style-large"><p>Add a short proof point, customer quote, or internal result that supports the promise.</p><cite>Proof point</cite></blockquote><!-- /wp:quote -->';
 
 	$content .= '<!-- wp:spacer {"height":"48px"} --><div style="height:48px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
-	$content .= '<!-- wp:separator {"backgroundColor":"contrast-3"} --><hr class="wp-block-separator has-text-color has-contrast-3-color has-alpha-channel-opacity has-contrast-3-background-color has-background"/><!-- /wp:separator -->';
-	$content .= '<!-- wp:group {"style":{"spacing":{"padding":{"top":"3rem","bottom":"3rem","left":"min(6vw,4rem)","right":"min(6vw,4rem)"},"blockGap":"1rem"}},"layout":{"type":"constrained"}} --><div class="wp-block-group" style="padding-top:3rem;padding-right:min(6vw,4rem);padding-bottom:3rem;padding-left:min(6vw,4rem)">'
-		. mcp_abilities_gutenberg_heading_block( 'Ready to make ' . $business_name . ' the stop people talk about?', 2 )
-		. mcp_abilities_gutenberg_paragraph_block( 'Use this final call to action for ordering, preorders, catering requests, or location details once the operational pieces are confirmed.' )
-		. '<!-- wp:buttons {"layout":{"type":"flex","justifyContent":"left"}} --><div class="wp-block-buttons"><!-- wp:button {"style":{"border":{"radius":"999px"}}} --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" style="border-radius:999px">' . esc_html( $primary_cta ) . '</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'
+	$content .= '<!-- wp:separator --><hr class="wp-block-separator has-alpha-channel-opacity"/><!-- /wp:separator -->';
+	$content .= '<!-- wp:group {"layout":{"type":"constrained"}} --><div class="wp-block-group">'
+		. mcp_abilities_gutenberg_heading_block( 'Ready to take the next step with ' . $business_name . '?', 2 )
+		. mcp_abilities_gutenberg_paragraph_block( 'Use this final call to action for the main conversion path once the operational details are confirmed.' )
+		. mcp_abilities_gutenberg_buttons_block( $primary_cta )
 		. '</div><!-- /wp:group -->';
 
 	$title = isset( $input['title'] ) && '' !== trim( (string) $input['title'] ) ? trim( (string) $input['title'] ) : $business_name;

@@ -4,11 +4,11 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 
 [![GitHub release](https://badgen.net/github/release/bjornfix/mcp-abilities-block-editor/stable)](https://github.com/bjornfix/mcp-abilities-block-editor/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
-[![WordPress](https://img.shields.io/badge/WordPress-7.0%2B-blue.svg)](https://wordpress.org)
+[![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.14
+**Stable tag:** 0.20.15
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -199,7 +199,7 @@ If you skip base-stack verification and start with add-ons immediately, troubles
   "ability_name": "gutenberg/generate-section",
   "parameters": {
     "recipe": "pricing",
-    "business_name": "Devenia",
+    "business_name": "Example Studio",
     "tone": "clear and commercially sharp"
   }
 }
@@ -245,6 +245,11 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.15
+- Lowered the minimum WordPress metadata back to 6.9 while keeping 7.0 as the tested version.
+- Made generated landing pages and reusable sections theme-neutral by removing bakery-specific copy, hardcoded gradient identity, and block-level typography overrides.
+- Added small generation helpers for buttons and lists so generated markup has better locality and is easier to audit.
 
 ### 0.20.14
 - Improved ability error responses so WordPress error codes, issue lists, and structured error data are preserved instead of returning message-only failures.

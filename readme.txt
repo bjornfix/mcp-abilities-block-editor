@@ -1,10 +1,10 @@
 === MCP Abilities - Block Editor ===
 Contributors: basicus
 Tags: mcp, gutenberg, block-editor, blocks, automation
-Requires at least: 7.0
+Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.14
+Stable tag: 0.20.15
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,11 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.15 =
+* Lowered the minimum WordPress metadata back to 6.9 while keeping 7.0 as the tested version.
+* Made generated landing pages and reusable sections theme-neutral by removing bakery-specific copy, hardcoded gradient identity, and block-level typography overrides.
+* Added small generation helpers for buttons and lists so generated markup has better locality and is easier to audit.
 
 = 0.20.14 =
 * Improved: ability error responses now preserve WordPress error codes, issue lists, and structured error data instead of returning message-only failures.
