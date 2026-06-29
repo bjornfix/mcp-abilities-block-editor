@@ -8,7 +8,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.12
+**Stable tag:** 0.20.13
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,7 +16,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 
 WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
 
-This plugin is part of the Devenia MCP abilities ecosystem. It gives an MCP-capable agent a focused, authenticated way to work with Block Editor work inside WordPress through MCP.
+This plugin is part of the MCP abilities ecosystem. It gives an MCP-capable agent a focused, authenticated way to work with Block Editor work inside WordPress through MCP.
 
 **Example:** "Handle this WordPress maintenance task directly." - The agent can inspect the site, call the relevant ability, and return the result without making the human click through wp-admin for every step.
 
@@ -246,6 +246,14 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 
 ## Changelog
 
+### 0.20.13
+- Refactored the block-editor implementation into focused include modules for core block handling, catalogs/site editor data, content analysis, block mutations, generation, and ability registration. No MCP ability names changed.
+- Added write and generator gates that reject invalid Gutenberg block syntax before saving or returning generated content, with concrete issue details.
+- Hardened site-editor template and navigation writes so they require the WordPress `edit_theme_options` capability.
+
+### 0.20.12
+- Fixed: `gutenberg/audit-content` no longer flags `core/buttons` wrapper blocks as missing links, avoiding false `button_without_link` warnings during valid button-group layouts
+
 ### 0.20.11
 - Shared one editor-safe save pipeline across Gutenberg write paths for content preparation, layout validation, design-markup protection, persistence, and response formatting
 - Reused the same write safety checks for page, template, navigation, synced-pattern, and post block updates
@@ -339,7 +347,7 @@ GPL-2.0+
 
 ## Author
 
-[Devenia](https://devenia.com) - We've been doing SEO and web development since 1993.
+[basicus](https://profiles.wordpress.org/basicus/)
 
 ## Links
 
