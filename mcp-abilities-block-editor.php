@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.15
+ * Version: 0.20.16
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -79,6 +79,16 @@ function mcp_abilities_gutenberg_register_category(): void {
  * @return void
  */
 function mcp_abilities_gutenberg_register_ability( string $name, array $args ): void {
+	if (
+		isset( $args['input_schema'] )
+		&& is_array( $args['input_schema'] )
+		&& isset( $args['input_schema']['type'] )
+		&& 'object' === $args['input_schema']['type']
+		&& empty( $args['input_schema']['properties'] )
+	) {
+		$args['input_schema']['type'] = array( 'object', 'array', 'null' );
+	}
+
 	if ( isset( $args['output_schema']['properties'] ) && is_array( $args['output_schema']['properties'] ) ) {
 		$args['output_schema']['properties'] = array_merge(
 			array(

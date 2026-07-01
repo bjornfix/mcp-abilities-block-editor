@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.15
+Stable tag: 0.20.16
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,9 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.16 =
+* Fixed no-argument Gutenberg abilities so MCP adapters that send empty input as an empty PHP array can still call style-guide, pattern, and site-editor inspection tools.
 
 = 0.20.15 =
 * Lowered the minimum WordPress metadata back to 6.9 while keeping 7.0 as the tested version.

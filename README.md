@@ -8,7 +8,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.15
+**Stable tag:** 0.20.16
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
