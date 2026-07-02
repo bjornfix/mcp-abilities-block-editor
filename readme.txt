@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.16
+Stable tag: 0.20.18
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -37,6 +37,7 @@ Included abilities:
 - `gutenberg/generate-section`
 - `gutenberg/generate-query-section`
 - `gutenberg/validate-content`
+- `gutenberg/validate-devenia-editorial-post`
 - `gutenberg/audit-content`
 - `gutenberg/evaluate-design`
 - `gutenberg/suggest-design-fixes`
@@ -134,6 +135,12 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.18 =
+* Added: shared `devenia_editorial_source_post_validation` adapter so source-write and translation workflows can fail closed when a source post is not a valid Devenia editorial design source.
+
+= 0.20.17 =
+* Added `gutenberg/validate-devenia-editorial-post` for the approved native GeneratePress/GenerateBlocks Devenia source-post guardrails.
 
 = 0.20.16 =
 * Fixed no-argument Gutenberg abilities so MCP adapters that send empty input as an empty PHP array can still call style-guide, pattern, and site-editor inspection tools.
