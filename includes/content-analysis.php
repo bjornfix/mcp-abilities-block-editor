@@ -4018,6 +4018,94 @@ function mcp_abilities_gutenberg_assert_block_document_write_safe( string $conte
 }
 
 /**
+ * Check whether a post is a Devenia translation rather than an English source.
+ *
+ * This plugin is reusable outside Devenia, so the check stays metadata-based and
+ * optional. It only affects sites that also expose the Devenia validation filter.
+ *
+ * @param int $post_id Post ID.
+ * @return bool
+ */
+function mcp_abilities_gutenberg_is_devenia_translation_post( int $post_id ): bool {
+	if ( $post_id <= 0 ) {
+		return false;
+	}
+
+	$language  = get_post_meta( $post_id, '_devenia_translation_language', true );
+	$source_id = get_post_meta( $post_id, '_devenia_translation_source_id', true );
+
+	return '' !== (string) $language || (int) $source_id > 0;
+}
+
+/**
+ * Preflight Devenia published source-post design validation before wp_update_post().
+ *
+ * Without this, a targeted repair can be stopped by the downstream publish-save
+ * gate that it is trying to satisfy. The preflight validates the proposed new
+ * content, so a repair that makes the source pass can proceed normally.
+ *
+ * @param WP_Post             $post          Existing post.
+ * @param string              $target_status Target status after the update.
+ * @param string              $content       Proposed post content.
+ * @param array<string,mixed> $input         Ability input.
+ * @param string              $ability       Calling ability.
+ * @return true|WP_Error
+ */
+function mcp_abilities_gutenberg_validate_devenia_source_design_gate( WP_Post $post, string $target_status, string $content, array $input, string $ability ) {
+	if ( 'post' !== (string) $post->post_type || 'publish' !== $target_status ) {
+		return true;
+	}
+
+	if ( ! class_exists( 'Devenia_AI_Translations' ) ) {
+		return true;
+	}
+
+	if ( mcp_abilities_gutenberg_is_devenia_translation_post( (int) $post->ID ) ) {
+		return true;
+	}
+
+	$validation = function_exists( 'mcp_abilities_gutenberg_devenia_editorial_source_post_validation_filter' )
+		? mcp_abilities_gutenberg_devenia_editorial_source_post_validation_filter(
+			null,
+			$post,
+			$content,
+			array(
+				'caller'        => 'mcp-abilities-block-editor',
+				'ability'       => $ability,
+				'post_type'     => (string) $post->post_type,
+				'target_status' => $target_status,
+			)
+		)
+		: null;
+
+	if ( ! is_array( $validation ) || empty( $validation['available'] ) ) {
+		return new WP_Error(
+			'mcp_gutenberg_devenia_source_gate_unavailable',
+			'Devenia source-post editorial validation is unavailable. Activate the presentation validation adapter before updating published source posts.'
+		);
+	}
+
+	if ( ! empty( $validation['passed'] ) ) {
+		return true;
+	}
+
+	$codes = array();
+	foreach ( (array) ( $validation['issue_codes'] ?? array() ) as $code ) {
+		$codes[] = sanitize_key( (string) $code );
+	}
+	$codes = array_values( array_filter( array_unique( $codes ) ) );
+
+	return new WP_Error(
+		'mcp_gutenberg_devenia_source_gate_failed',
+		sprintf(
+			'Published Devenia source posts must pass the editorial source-design gate before saving. Proposed content failed checks: %s',
+			$codes ? implode( ', ', $codes ) : 'unknown'
+		),
+		$validation
+	);
+}
+
+/**
  * Return the standard post payload after a block-document write.
  *
  * @param WP_Post $post Post object after persistence.
@@ -4057,6 +4145,18 @@ function mcp_abilities_gutenberg_update_block_document_post(
 	$write_guard = mcp_abilities_gutenberg_assert_block_document_write_safe( $content, $input, $preserve_design_markup ? (string) $post->post_content : null );
 	if ( is_wp_error( $write_guard ) ) {
 		return $write_guard;
+	}
+
+	$target_status = isset( $update_args['post_status'] ) ? (string) $update_args['post_status'] : (string) $post->post_status;
+	$source_guard  = mcp_abilities_gutenberg_validate_devenia_source_design_gate(
+		$post,
+		$target_status,
+		$content,
+		$input,
+		'gutenberg/update-post-blocks'
+	);
+	if ( is_wp_error( $source_guard ) ) {
+		return $source_guard;
 	}
 
 	$update_args = array_merge(

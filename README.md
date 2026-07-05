@@ -8,7 +8,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.18
+**Stable tag:** 0.20.19
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -247,6 +247,9 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.19
+- Fixed `gutenberg/update-post-blocks` so Devenia source-design repairs are preflighted against the proposed content before save, allowing targeted fixes that make the source pass the editorial design gate.
 
 ### 0.20.18
 - Added a shared `devenia_editorial_source_post_validation` adapter so source-write and translation workflows can fail closed when a source post is not a valid Devenia editorial design source.

@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.18
+Stable tag: 0.20.19
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -135,6 +135,9 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.19 =
+* Fixed `gutenberg/update-post-blocks` so Devenia source-design repairs are preflighted against the proposed content before save, allowing targeted fixes that make the source pass the editorial design gate.
 
 = 0.20.18 =
 * Added: shared `devenia_editorial_source_post_validation` adapter so source-write and translation workflows can fail closed when a source post is not a valid Devenia editorial design source.
