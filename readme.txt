@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.19
+Stable tag: 0.20.20
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -135,6 +135,9 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.20 =
+* Routes Devenia source-design update preflight through the shared presentation validation filter so Site Presentation owns article contract validation.
 
 = 0.20.19 =
 * Fixed `gutenberg/update-post-blocks` so Devenia source-design repairs are preflighted against the proposed content before save, allowing targeted fixes that make the source pass the editorial design gate.
