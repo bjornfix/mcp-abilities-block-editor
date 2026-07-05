@@ -8,7 +8,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.21
+**Stable tag:** 0.20.22
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -247,6 +247,9 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.22
+- Fixed FAQ schema detection for nested Rank Math FAQ blocks inside Gutenberg container layouts.
 
 ### 0.20.21
 - Refined Gutenberg design evaluation so Rank Math FAQ blocks are recognized as schema-backed FAQ content and normal three-card support rows are not blocked as cramped when their copy load is moderate.

@@ -3450,14 +3450,31 @@ function mcp_abilities_gutenberg_collect_repeated_object_treatment_issues( strin
 			return true;
 		}
 
-		foreach ( parse_blocks( $content ) as $block ) {
-			if ( ! is_array( $block ) || 'rank-math/faq-block' !== (string) ( $block['blockName'] ?? '' ) ) {
+		return mcp_abilities_gutenberg_blocks_have_faq_schema_provider( parse_blocks( $content ) );
+	}
+
+	/**
+	 * Check parsed blocks recursively for blocks that provide FAQ schema at render time.
+	 *
+	 * @param array<int,array<string,mixed>> $blocks Parsed blocks.
+	 * @return bool
+	 */
+	function mcp_abilities_gutenberg_blocks_have_faq_schema_provider( array $blocks ): bool {
+		foreach ( $blocks as $block ) {
+			if ( ! is_array( $block ) ) {
 				continue;
 			}
 
-			$attrs     = is_array( $block['attrs'] ?? null ) ? $block['attrs'] : array();
-			$questions = is_array( $attrs['questions'] ?? null ) ? $attrs['questions'] : array();
-			if ( count( $questions ) >= 2 ) {
+			if ( 'rank-math/faq-block' === (string) ( $block['blockName'] ?? '' ) ) {
+				$attrs     = is_array( $block['attrs'] ?? null ) ? $block['attrs'] : array();
+				$questions = is_array( $attrs['questions'] ?? null ) ? $attrs['questions'] : array();
+				if ( count( $questions ) >= 2 ) {
+					return true;
+				}
+			}
+
+			$inner_blocks = is_array( $block['innerBlocks'] ?? null ) ? $block['innerBlocks'] : array();
+			if ( ! empty( $inner_blocks ) && mcp_abilities_gutenberg_blocks_have_faq_schema_provider( $inner_blocks ) ) {
 				return true;
 			}
 		}
