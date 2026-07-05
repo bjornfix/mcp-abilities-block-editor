@@ -3234,13 +3234,15 @@ function mcp_abilities_gutenberg_collect_rendered_support_module_cramp_issues( s
 		}
 
 		$is_cramped = false;
-		if ( 4 === $child_count && $avg_words >= 12 ) {
-			$is_cramped = true;
-		} elseif ( 3 === $child_count && $avg_words >= 9 ) {
-			$is_cramped = true;
-		} elseif ( $max_words >= 24 && $child_count >= 3 ) {
-			$is_cramped = true;
-		}
+			if ( 4 === $child_count && $avg_words >= 12 ) {
+				$is_cramped = true;
+			} elseif ( 3 === $child_count && $avg_words >= 22 ) {
+				$is_cramped = true;
+			} elseif ( 4 === $child_count && $max_words >= 24 ) {
+				$is_cramped = true;
+			} elseif ( 3 === $child_count && $max_words >= 32 ) {
+				$is_cramped = true;
+			}
 
 		if ( ! $is_cramped ) {
 			continue;
@@ -3443,9 +3445,25 @@ function mcp_abilities_gutenberg_collect_repeated_object_treatment_issues( strin
  * @param string $content Raw content.
  * @return bool
  */
-function mcp_abilities_gutenberg_content_has_faq_schema( string $content ): bool {
-	return 1 === preg_match( '/"@type"\s*:\s*"FAQPage"|"@type":"FAQPage"/', $content );
-}
+	function mcp_abilities_gutenberg_content_has_faq_schema( string $content ): bool {
+		if ( 1 === preg_match( '/"@type"\s*:\s*"FAQPage"|"@type":"FAQPage"/', $content ) ) {
+			return true;
+		}
+
+		foreach ( parse_blocks( $content ) as $block ) {
+			if ( ! is_array( $block ) || 'rank-math/faq-block' !== (string) ( $block['blockName'] ?? '' ) ) {
+				continue;
+			}
+
+			$attrs     = is_array( $block['attrs'] ?? null ) ? $block['attrs'] : array();
+			$questions = is_array( $attrs['questions'] ?? null ) ? $attrs['questions'] : array();
+			if ( count( $questions ) >= 2 ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
 
 /**
  * Detect visually structured FAQ sections that are missing matching FAQ schema.
