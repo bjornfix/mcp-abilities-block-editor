@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.22
+Stable tag: 0.20.23
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -135,6 +135,9 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.23 =
+* Recognizes semantic GenerateBlocks headlines during content validation and keeps static-markup mutation guidance in the structured guardrail field instead of emitting a page warning.
 
 = 0.20.22 =
 * Fixed FAQ schema detection for nested Rank Math FAQ blocks inside Gutenberg container layouts.

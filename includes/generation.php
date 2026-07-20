@@ -496,6 +496,38 @@ function mcp_abilities_gutenberg_generate_section_payload( array $input ) {
  * @param string $content Content to validate.
  * @return array<string,mixed>
  */
+/**
+ * Determine whether a normalized block tree contains a semantic heading.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ */
+function mcp_abilities_gutenberg_has_semantic_heading( array $blocks ): bool {
+	foreach ( $blocks as $block ) {
+		if ( ! is_array( $block ) ) {
+			continue;
+		}
+
+		$block_name = isset( $block['block_name'] ) ? (string) $block['block_name'] : '';
+		$attrs      = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+		$element    = isset( $attrs['element'] ) ? strtolower( (string) $attrs['element'] ) : '';
+		$inner_html = isset( $block['inner_html'] ) ? (string) $block['inner_html'] : '';
+
+		if ( 'core/heading' === $block_name ) {
+			return true;
+		}
+		if ( 'generateblocks/headline' === $block_name && ( preg_match( '/^h[1-6]$/', $element ) || preg_match( '/<h[1-6]\b/i', $inner_html ) ) ) {
+			return true;
+		}
+
+		$inner_blocks = isset( $block['inner_blocks'] ) && is_array( $block['inner_blocks'] ) ? $block['inner_blocks'] : array();
+		if ( ! empty( $inner_blocks ) && mcp_abilities_gutenberg_has_semantic_heading( $inner_blocks ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	$parsed_blocks       = parse_blocks( $content );
 	$normalized          = mcp_abilities_gutenberg_normalize_blocks( $parsed_blocks );
@@ -545,7 +577,7 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	if ( empty( $normalized ) ) {
 		$warnings[] = 'Content contains no Gutenberg blocks.';
 	}
-	if ( ! in_array( 'core/heading', $all_block_names, true ) ) {
+	if ( ! mcp_abilities_gutenberg_has_semantic_heading( $normalized ) ) {
 		$warnings[] = 'No heading block found anywhere in the block tree.';
 	}
 	if ( ! in_array( 'core/buttons', $all_block_names, true ) ) {
@@ -553,9 +585,6 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	}
 	if ( count( $normalized ) < 3 ) {
 		$warnings[] = 'Very few top-level blocks; page structure may be too shallow for a landing page.';
-	}
-	if ( ! empty( $markup_bearing_block_names ) ) {
-		$warnings[] = 'Markup-bearing blocks are present; attr-only mutations may require saved markup regeneration to affect frontend rendering.';
 	}
 	if ( ! empty( $layout_risks['issues'] ) ) {
 		$issue_types = array_values(
