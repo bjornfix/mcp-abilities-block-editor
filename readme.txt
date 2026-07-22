@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.23
+Stable tag: 0.20.24
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -37,7 +37,6 @@ Included abilities:
 - `gutenberg/generate-section`
 - `gutenberg/generate-query-section`
 - `gutenberg/validate-content`
-- `gutenberg/validate-devenia-editorial-post`
 - `gutenberg/audit-content`
 - `gutenberg/evaluate-design`
 - `gutenberg/suggest-design-fixes`
@@ -136,6 +135,10 @@ Requires the Abilities API plugin.
 
 == Changelog ==
 
+= 0.20.24 =
+* Adds neutral site-policy seams for block-document write preflight and protected design markers.
+* Removes the site-specific editorial validator and ability; site policy belongs in the site's private adapter.
+
 = 0.20.23 =
 * Recognizes semantic GenerateBlocks headlines during content validation and keeps static-markup mutation guidance in the structured guardrail field instead of emitting a page warning.
 
@@ -146,16 +149,16 @@ Requires the Abilities API plugin.
 * Refined Gutenberg design evaluation so Rank Math FAQ blocks are recognized as schema-backed FAQ content and normal three-card support rows are not blocked as cramped when their copy load is moderate.
 
 = 0.20.20 =
-* Routes Devenia source-design update preflight through the shared presentation validation filter so Site Presentation owns article contract validation.
+* Routes source-design update preflight through a registered site-policy filter so the site adapter owns its contract.
 
 = 0.20.19 =
-* Fixed `gutenberg/update-post-blocks` so Devenia source-design repairs are preflighted against the proposed content before save, allowing targeted fixes that make the source pass the editorial design gate.
+* Fixed `gutenberg/update-post-blocks` so registered source-design repairs are preflighted against proposed content before save.
 
 = 0.20.18 =
-* Added: shared `devenia_editorial_source_post_validation` adapter so source-write and translation workflows can fail closed when a source post is not a valid Devenia editorial design source.
+* Added an early site-policy source-design adapter; superseded by the neutral public seams in 0.20.24.
 
 = 0.20.17 =
-* Added `gutenberg/validate-devenia-editorial-post` for the approved native GeneratePress/GenerateBlocks Devenia source-post guardrails.
+* Added an early site-specific editorial validator; removed from the public plugin in 0.20.24.
 
 = 0.20.16 =
 * Fixed no-argument Gutenberg abilities so MCP adapters that send empty input as an empty PHP array can still call style-guide, pattern, and site-editor inspection tools.

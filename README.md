@@ -8,7 +8,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.23
+**Stable tag:** 0.20.24
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -132,7 +132,6 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 | `gutenberg/generate-section` | Generate a reusable section from recipe-style inputs |
 | `gutenberg/generate-query-section` | Generate a dynamic `core/query` section |
 | `gutenberg/validate-content` | Validate block-tree shape, mutation safety, and layout-risk styles |
-| `gutenberg/validate-devenia-editorial-post` | Validate Devenia source posts against the approved native GP/GB editorial guardrails |
 | `gutenberg/audit-content` | Run Gutenberg-specific QA checks on content structure |
 | `gutenberg/evaluate-design` | Score design coherence and flag layout/design issues |
 | `gutenberg/suggest-design-fixes` | Turn design findings into concrete remediation suggestions |
@@ -243,10 +242,14 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - It is designed to keep Gutenberg content as structured data instead of brittle HTML strings.
 - `gutenberg/evaluate-design`, `gutenberg/evaluate-copy`, and `gutenberg/evaluate-render-context` exist to catch weak output before publishing, not just after.
 - `gutenberg/validate-content` now includes mutation guardrails for static-block edits and layout-risk style detection.
-- `gutenberg/validate-devenia-editorial-post` checks the native Devenia editorial source-post rules before translations inherit the block tree.
+- Block-document writes expose neutral preflight and protected-marker filters so a site plugin can add policy without coupling this public plugin to that site.
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.24
+- Adds neutral site-policy seams for block-document write preflight and protected design markers.
+- Removes the site-specific editorial validator and ability from this public plugin; site policy now belongs in the site's private adapter.
 
 ### 0.20.23
 - Recognizes semantic GenerateBlocks headlines during content validation and keeps static-markup mutation guidance in the structured guardrail field instead of emitting a page warning.
@@ -258,16 +261,16 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - Refined Gutenberg design evaluation so Rank Math FAQ blocks are recognized as schema-backed FAQ content and normal three-card support rows are not blocked as cramped when their copy load is moderate.
 
 ### 0.20.20
-- Routes Devenia source-design update preflight through the shared presentation validation filter so Site Presentation owns article contract validation.
+- Routes source-design update preflight through a registered site-policy filter so the site adapter owns its contract.
 
 ### 0.20.19
-- Fixed `gutenberg/update-post-blocks` so Devenia source-design repairs are preflighted against the proposed content before save, allowing targeted fixes that make the source pass the editorial design gate.
+- Fixed `gutenberg/update-post-blocks` so registered source-design repairs are preflighted against proposed content before save.
 
 ### 0.20.18
-- Added a shared `devenia_editorial_source_post_validation` adapter so source-write and translation workflows can fail closed when a source post is not a valid Devenia editorial design source.
+- Added an early site-policy source-design adapter; superseded by the neutral public seams in 0.20.24.
 
 ### 0.20.17
-- Added `gutenberg/validate-devenia-editorial-post` for the approved native GeneratePress/GenerateBlocks Devenia source-post guardrails.
+- Added an early site-specific editorial validator; removed from the public plugin in 0.20.24.
 
 ### 0.20.16
 - Fixed no-argument Gutenberg abilities so MCP adapters that send empty input as an empty PHP array can still call style-guide, pattern, and site-editor inspection tools.

@@ -147,370 +147,6 @@ function mcp_abilities_gutenberg_analyze_content( string $content ): array {
 }
 
 /**
- * Validate Devenia editorial post guardrails.
- *
- * @param string $content Gutenberg content.
- * @return array<string,mixed>
- */
-function mcp_abilities_gutenberg_validate_devenia_editorial_post( string $content ): array {
-	$validation = mcp_abilities_gutenberg_validate_content( $content );
-	$metrics    = array(
-		'top_level_section_count'      => 0,
-		'section_hero_count'           => 0,
-		'section_warm_count'           => 0,
-		'section_dark_count'           => 0,
-		'card_warm_count'              => 0,
-		'wp_group_count'               => 0,
-		'alignfull_count'              => 0,
-		'hundred_vw_count'             => 0,
-		'style_tag_count'              => 0,
-		'script_tag_count'             => 0,
-		'inline_style_attr_count'      => 0,
-		'block_style_attr_count'       => 0,
-		'typography_attr_count'        => 0,
-		'placeholder_count'            => 0,
-		'rank_math_faq_count'          => 0,
-		'post_featured_image_count'    => 0,
-		'contained_image_count'        => 0,
-		'h1_count'                     => 0,
-		'duplicate_unique_id_count'    => 0,
-		'post_specific_unique_id_count'=> 0,
-	);
-	$state      = array(
-		'metrics'                => $metrics,
-		'block_usage'            => array(),
-		'unique_ids'             => array(),
-		'duplicate_unique_ids'   => array(),
-		'last_top_level_classes' => array(),
-	);
-
-	mcp_abilities_gutenberg_collect_devenia_editorial_metrics( parse_blocks( $content ), $state );
-
-	$metrics = $state['metrics'];
-	$metrics['alignfull_count'] += preg_match_all( '/\balignfull\b|["\']align["\']\s*:\s*["\']full["\']/i', $content );
-	$metrics['hundred_vw_count'] = preg_match_all( '/100vw/i', $content );
-	$metrics['style_tag_count'] = preg_match_all( '/<\s*style\b/i', $content );
-	$metrics['script_tag_count'] = preg_match_all( '/<\s*script\b/i', $content );
-	$metrics['inline_style_attr_count'] = preg_match_all( '/\sstyle\s*=/i', $content );
-	$metrics['placeholder_count'] = preg_match_all( '/\{\{[^}]+\}\}/', $content );
-	$metrics['h1_count'] = preg_match_all( '/<h1\b/i', $content );
-	$metrics['duplicate_unique_id_count'] = count( $state['duplicate_unique_ids'] );
-	$metrics['block_usage'] = $state['block_usage'];
-	$metrics['last_top_level_classes'] = array_values( $state['last_top_level_classes'] );
-
-	$issues   = array();
-	$warnings = array();
-
-	if ( empty( $validation['is_valid_gutenberg'] ) ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'invalid_gutenberg', 'The content must be valid Gutenberg before it can be used as a source design.' );
-	}
-	if ( empty( $validation['roundtrip_equal'] ) ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'unstable_roundtrip', 'The block tree must survive a parse/serialize round trip unchanged.' );
-	}
-	if ( ! empty( $validation['layout_risks']['issue_count'] ) ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'layout_risks', 'Embedded layout-risk styles are not allowed in Devenia editorial post sources.', $validation['layout_risks'] );
-	}
-	if ( $metrics['alignfull_count'] > 0 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'alignfull_disallowed', 'Do not use alignfull for Devenia editorial posts. Use the native GeneratePress container width and Devenia section global styles.', array( 'count' => $metrics['alignfull_count'] ) );
-	}
-	if ( $metrics['hundred_vw_count'] > 0 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'hundred_vw_disallowed', '100vw is not allowed because it can create horizontal overflow in real browsers.', array( 'count' => $metrics['hundred_vw_count'] ) );
-	}
-	if ( $metrics['style_tag_count'] > 0 || $metrics['script_tag_count'] > 0 || $metrics['inline_style_attr_count'] > 0 || $metrics['block_style_attr_count'] > 0 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item(
-			'custom_style_disallowed',
-			'Devenia editorial design must be native Gutenberg/GenerateBlocks/Global Styles, not inline styles, style blocks, scripts, or block style attributes.',
-			array(
-				'style_tag_count'         => $metrics['style_tag_count'],
-				'script_tag_count'        => $metrics['script_tag_count'],
-				'inline_style_attr_count' => $metrics['inline_style_attr_count'],
-				'block_style_attr_count'  => $metrics['block_style_attr_count'],
-			)
-		);
-	}
-	if ( $metrics['typography_attr_count'] > 0 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'block_typography_disallowed', 'Block-level typography attributes are not allowed. Typography belongs in GeneratePress/global settings.', array( 'count' => $metrics['typography_attr_count'] ) );
-	}
-	if ( $metrics['wp_group_count'] > 0 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'core_group_disallowed', 'Use GenerateBlocks containers for Devenia editorial source layouts, not core/group wrappers.', array( 'count' => $metrics['wp_group_count'] ) );
-	}
-	if ( $metrics['placeholder_count'] > 0 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'unresolved_placeholders', 'The pattern still contains {{placeholder}} tokens and is not ready to publish or inherit into translations.', array( 'count' => $metrics['placeholder_count'] ) );
-	}
-	if ( $metrics['duplicate_unique_id_count'] > 0 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'duplicate_generateblocks_ids', 'Duplicate GenerateBlocks uniqueId values can make editor/CSS behavior ambiguous.', array( 'ids' => array_values( array_unique( $state['duplicate_unique_ids'] ) ) ) );
-	}
-	if ( $metrics['h1_count'] !== 1 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'single_h1_required', 'A Devenia editorial source post must have exactly one H1 inside the content hero.', array( 'count' => $metrics['h1_count'] ) );
-	}
-	if ( $metrics['section_hero_count'] < 1 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'hero_section_missing', 'The source post needs a `dv-section--hero` GenerateBlocks hero section.' );
-	}
-	if ( $metrics['section_warm_count'] < 1 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'warm_section_missing', 'The source post needs at least one deliberate `dv-section--warm` decision surface.' );
-	}
-	if ( $metrics['section_dark_count'] < 2 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'dark_section_rhythm_missing', 'The source post needs at least two `dv-section--dark` moments: one chapter emphasis and one closing/comment bridge.', array( 'count' => $metrics['section_dark_count'] ) );
-	}
-	if ( $metrics['card_warm_count'] < 3 ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'warm_cards_missing', 'The source post needs at least three `dv-card--warm` cards so comparison/decision points are not left as flat text.', array( 'count' => $metrics['card_warm_count'] ) );
-	}
-	if ( 0 === $metrics['post_featured_image_count'] && 0 === $metrics['contained_image_count'] ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'featured_media_missing', 'The hero needs a current post featured-image block or a contained article image using `dv-media--contained`.' );
-	}
-	if ( ! in_array( 'dv-section--dark', $state['last_top_level_classes'], true ) ) {
-		$issues[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'closing_bridge_missing', 'The final top-level section should be a dark Devenia closing surface that leads into comments.' );
-	}
-
-	if ( $metrics['rank_math_faq_count'] < 1 ) {
-		$warnings[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'faq_missing', 'No Rank Math FAQ block was found. This can be valid for some posts, but most evergreen posts should include a useful FAQ.' );
-	}
-	if ( ! mcp_abilities_gutenberg_devenia_editorial_shortcode_field_present( $content, 'person.author.link_html' ) ) {
-		$warnings[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'static_author_byline', 'The author byline is not using the shared localized presentation surface.' );
-	}
-	if ( ! mcp_abilities_gutenberg_devenia_editorial_shortcode_field_present( $content, 'labels.author' ) ) {
-		$warnings[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'static_author_label', 'The author label is not using the shared localized presentation surface.' );
-	}
-	if ( ! mcp_abilities_gutenberg_devenia_editorial_shortcode_field_present( $content, 'text.title' ) ) {
-		$warnings[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'static_title', 'The hero title is static instead of using `text.title`; approved existing sources may keep this, but new reusable templates should use the presentation surface.' );
-	}
-	if ( ! mcp_abilities_gutenberg_devenia_editorial_shortcode_field_present( $content, 'text.excerpt' ) ) {
-		$warnings[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'static_excerpt', 'The hero lead is static instead of using `text.excerpt`; approved existing sources may keep this, but new reusable templates should use the presentation surface.' );
-	}
-	if ( $metrics['top_level_section_count'] < 6 ) {
-		$warnings[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'shallow_section_rhythm', 'Very few top-level sections. Check whether the article has enough rhythm from hero to comments.', array( 'count' => $metrics['top_level_section_count'] ) );
-	}
-	if ( $metrics['post_specific_unique_id_count'] > 0 ) {
-		$warnings[] = mcp_abilities_gutenberg_devenia_editorial_result_item( 'post_specific_unique_ids', 'This source contains post-specific GenerateBlocks IDs. Do not clone them blindly into new posts.', array( 'count' => $metrics['post_specific_unique_id_count'] ) );
-	}
-
-	return array(
-		'passed'        => empty( $issues ),
-		'issue_count'   => count( $issues ),
-		'warning_count' => count( $warnings ),
-		'issues'        => $issues,
-		'warnings'      => $warnings,
-		'metrics'       => $metrics,
-		'validation'    => $validation,
-	);
-}
-
-/**
- * Adapter for the shared Devenia editorial source-post validation seam.
- *
- * Other plugins should not duplicate Gutenberg design heuristics. They can ask
- * this filter whether a source post is safe to publish or use as the canonical
- * source-design tree for translations.
- *
- * @param mixed   $result  Existing validation result from an earlier adapter.
- * @param mixed   $post    Source post object, when available.
- * @param string  $content Proposed or current Gutenberg content.
- * @param mixed[] $context Calling context.
- * @return array<string,mixed>
- */
-function mcp_abilities_gutenberg_devenia_editorial_source_post_validation_filter( $result, $post, string $content, array $context = array() ): array {
-	if ( is_array( $result ) && array_key_exists( 'passed', $result ) ) {
-		return $result;
-	}
-
-	$validation = mcp_abilities_gutenberg_validate_devenia_editorial_post( $content );
-	$issue_codes = array();
-	foreach ( $validation['issues'] ?? array() as $issue ) {
-		if ( is_array( $issue ) && isset( $issue['code'] ) ) {
-			$issue_codes[] = (string) $issue['code'];
-		}
-	}
-
-	return array(
-		'available'    => true,
-		'adapter'      => 'mcp-abilities-block-editor',
-		'context'      => $context,
-		'post_id'      => $post instanceof WP_Post ? (int) $post->ID : 0,
-		'passed'       => ! empty( $validation['passed'] ),
-		'issue_count'  => absint( $validation['issue_count'] ?? 0 ),
-		'warning_count'=> absint( $validation['warning_count'] ?? 0 ),
-		'issue_codes'  => array_values( array_unique( $issue_codes ) ),
-		'validation'   => $validation,
-	);
-}
-
-add_filter( 'devenia_editorial_source_post_validation', 'mcp_abilities_gutenberg_devenia_editorial_source_post_validation_filter', 10, 4 );
-
-/**
- * Collect Devenia editorial metrics from raw parsed blocks.
- *
- * @param array<int,array<string,mixed>> $blocks Parsed blocks.
- * @param array<string,mixed>            $state Mutable state.
- * @param int                            $depth Current block depth.
- */
-function mcp_abilities_gutenberg_collect_devenia_editorial_metrics( array $blocks, array &$state, int $depth = 0 ): void {
-	$disallowed_typography = array(
-		'typography',
-		'fontSize',
-		'fontSizeMobile',
-		'fontSizeTablet',
-		'lineHeight',
-		'lineHeightMobile',
-		'lineHeightTablet',
-		'fontWeight',
-		'letterSpacing',
-		'textTransform',
-		'fontFamily',
-		'fontStyle',
-	);
-
-	foreach ( $blocks as $block ) {
-		if ( ! is_array( $block ) ) {
-			continue;
-		}
-
-		$name   = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
-		$attrs  = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
-		$classes = mcp_abilities_gutenberg_devenia_editorial_block_classes( $attrs );
-
-		if ( '' !== $name ) {
-			if ( ! isset( $state['block_usage'][ $name ] ) ) {
-				$state['block_usage'][ $name ] = 0;
-			}
-			++$state['block_usage'][ $name ];
-		}
-
-		if ( 0 === $depth && '' !== $name ) {
-			++$state['metrics']['top_level_section_count'];
-			$state['last_top_level_classes'] = $classes;
-		}
-
-		if ( 'core/group' === $name ) {
-			++$state['metrics']['wp_group_count'];
-		}
-		if ( 'rank-math/faq-block' === $name ) {
-			++$state['metrics']['rank_math_faq_count'];
-		}
-		if ( 'core/post-featured-image' === $name ) {
-			++$state['metrics']['post_featured_image_count'];
-		}
-		if ( 'core/image' === $name && in_array( 'dv-media--contained', $classes, true ) ) {
-			++$state['metrics']['contained_image_count'];
-		}
-		if ( in_array( 'dv-section--hero', $classes, true ) ) {
-			++$state['metrics']['section_hero_count'];
-		}
-		if ( in_array( 'dv-section--warm', $classes, true ) ) {
-			++$state['metrics']['section_warm_count'];
-		}
-		if ( in_array( 'dv-section--dark', $classes, true ) ) {
-			++$state['metrics']['section_dark_count'];
-		}
-		if ( in_array( 'dv-card--warm', $classes, true ) ) {
-			++$state['metrics']['card_warm_count'];
-		}
-		if ( isset( $attrs['align'] ) && 'full' === (string) $attrs['align'] ) {
-			++$state['metrics']['alignfull_count'];
-		}
-		if ( in_array( 'alignfull', $classes, true ) ) {
-			++$state['metrics']['alignfull_count'];
-		}
-		if ( isset( $attrs['style'] ) ) {
-			++$state['metrics']['block_style_attr_count'];
-		}
-		if ( isset( $attrs['uniqueId'] ) && is_scalar( $attrs['uniqueId'] ) ) {
-			$unique_id = (string) $attrs['uniqueId'];
-			if ( isset( $state['unique_ids'][ $unique_id ] ) ) {
-				$state['duplicate_unique_ids'][] = $unique_id;
-			}
-			$state['unique_ids'][ $unique_id ] = true;
-			if ( false !== strpos( $unique_id, 'dv4249' ) ) {
-				++$state['metrics']['post_specific_unique_id_count'];
-			}
-		}
-
-		$state['metrics']['typography_attr_count'] += mcp_abilities_gutenberg_devenia_editorial_count_keys_recursive( $attrs, $disallowed_typography );
-
-		$inner_blocks = isset( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ? $block['innerBlocks'] : array();
-		if ( ! empty( $inner_blocks ) ) {
-			mcp_abilities_gutenberg_collect_devenia_editorial_metrics( $inner_blocks, $state, $depth + 1 );
-		}
-	}
-}
-
-/**
- * Extract class tokens from Gutenberg block attributes.
- *
- * @param array<string,mixed> $attrs Block attributes.
- * @return array<int,string>
- */
-function mcp_abilities_gutenberg_devenia_editorial_block_classes( array $attrs ): array {
-	$classes = array();
-
-	if ( isset( $attrs['className'] ) && is_string( $attrs['className'] ) ) {
-		$classes = array_merge( $classes, preg_split( '/\s+/', trim( $attrs['className'] ) ) ?: array() );
-	}
-	if ( isset( $attrs['globalClasses'] ) && is_array( $attrs['globalClasses'] ) ) {
-		foreach ( $attrs['globalClasses'] as $class ) {
-			if ( is_scalar( $class ) ) {
-				$classes[] = (string) $class;
-			}
-		}
-	}
-
-	return array_values(
-		array_unique(
-			array_filter(
-				array_map( 'strval', $classes ),
-				static function ( string $class ): bool {
-					return '' !== $class;
-				}
-			)
-		)
-	);
-}
-
-/**
- * Count disallowed keys recursively.
- *
- * @param mixed             $value Value to inspect.
- * @param array<int,string> $keys Disallowed keys.
- */
-function mcp_abilities_gutenberg_devenia_editorial_count_keys_recursive( $value, array $keys ): int {
-	if ( ! is_array( $value ) ) {
-		return 0;
-	}
-
-	$count = 0;
-	foreach ( $value as $key => $child ) {
-		if ( is_string( $key ) && in_array( $key, $keys, true ) ) {
-			++$count;
-		}
-		$count += mcp_abilities_gutenberg_devenia_editorial_count_keys_recursive( $child, $keys );
-	}
-
-	return $count;
-}
-
-/**
- * Check whether a `[devenia_presentation]` shortcode field is present.
- */
-function mcp_abilities_gutenberg_devenia_editorial_shortcode_field_present( string $content, string $field ): bool {
-	return 1 === preg_match( '/\[devenia_presentation\b[^\]]*\bfield\s*=\s*(["\'])' . preg_quote( $field, '/' ) . '\1/i', $content );
-}
-
-/**
- * Build a validator issue/warning item.
- *
- * @param string              $code Machine-readable code.
- * @param string              $message Human-readable message.
- * @param array<string,mixed> $context Optional context.
- * @return array<string,mixed>
- */
-function mcp_abilities_gutenberg_devenia_editorial_result_item( string $code, string $message, array $context = array() ): array {
-	return array(
-		'code'    => $code,
-		'message' => $message,
-		'context' => $context,
-	);
-}
-
-/**
  * Check whether a DOM element has meaningful rendered content.
  *
  * @param DOMElement $element Element to inspect.
@@ -3956,11 +3592,12 @@ function mcp_abilities_gutenberg_detect_design_markup_markers( string $content )
 		$markers[] = 'generateblocks';
 	}
 
-	if ( preg_match( '/\bdv-page-\d+[-_a-z0-9]*\b/i', $content ) ) {
-		$markers[] = 'devenia-design-classes';
+	$filtered_markers = apply_filters( 'mcp_abilities_gutenberg_design_markup_markers', $markers, $content );
+	if ( is_array( $filtered_markers ) ) {
+		$markers = $filtered_markers;
 	}
 
-	return array_values( array_unique( $markers ) );
+	return array_values( array_unique( array_filter( array_map( 'sanitize_key', $markers ) ) ) );
 }
 
 /**
@@ -4053,31 +3690,7 @@ function mcp_abilities_gutenberg_assert_block_document_write_safe( string $conte
 }
 
 /**
- * Check whether a post is a Devenia translation rather than an English source.
- *
- * This plugin is reusable outside Devenia, so the check stays metadata-based and
- * optional. It only affects sites that also expose the Devenia validation filter.
- *
- * @param int $post_id Post ID.
- * @return bool
- */
-function mcp_abilities_gutenberg_is_devenia_translation_post( int $post_id ): bool {
-	if ( $post_id <= 0 ) {
-		return false;
-	}
-
-	$language  = get_post_meta( $post_id, '_devenia_translation_language', true );
-	$source_id = get_post_meta( $post_id, '_devenia_translation_source_id', true );
-
-	return '' !== (string) $language || (int) $source_id > 0;
-}
-
-/**
- * Preflight Devenia published source-post design validation before wp_update_post().
- *
- * Without this, a targeted repair can be stopped by the downstream publish-save
- * gate that it is trying to satisfy. The preflight validates the proposed new
- * content, so a repair that makes the source pass can proceed normally.
+ * Run optional site policy before a block-document write mutates WordPress.
  *
  * @param WP_Post             $post          Existing post.
  * @param string              $target_status Target status after the update.
@@ -4086,69 +3699,27 @@ function mcp_abilities_gutenberg_is_devenia_translation_post( int $post_id ): bo
  * @param string              $ability       Calling ability.
  * @return true|WP_Error
  */
-function mcp_abilities_gutenberg_validate_devenia_source_design_gate( WP_Post $post, string $target_status, string $content, array $input, string $ability ) {
-	if ( 'post' !== (string) $post->post_type || 'publish' !== $target_status ) {
-		return true;
-	}
-
-	if ( ! class_exists( 'Devenia_AI_Translations' ) ) {
-		return true;
-	}
-
-	if ( mcp_abilities_gutenberg_is_devenia_translation_post( (int) $post->ID ) ) {
-		return true;
-	}
-
-	$validation = apply_filters(
-		'mcp_abilities_gutenberg_devenia_editorial_source_post_validation',
-		null,
-		$post,
-		$content,
+function mcp_abilities_gutenberg_validate_content_write_policy( WP_Post $post, string $target_status, string $content, array $input, string $ability ) {
+	$result = apply_filters(
+		'mcp_abilities_gutenberg_content_write_preflight',
+		true,
 		array(
-			'caller'        => 'mcp-abilities-block-editor',
-			'ability'       => $ability,
+			'post'          => $post,
 			'post_type'     => (string) $post->post_type,
 			'target_status' => $target_status,
+			'content'       => $content,
+			'input'         => $input,
+			'ability'       => $ability,
 		)
 	);
-	if ( ! is_array( $validation ) || empty( $validation['available'] ) ) {
-		$validation = mcp_abilities_gutenberg_devenia_editorial_source_post_validation_filter(
-			null,
-			$post,
-			$content,
-			array(
-				'caller'        => 'mcp-abilities-block-editor',
-				'ability'       => $ability,
-				'post_type'     => (string) $post->post_type,
-				'target_status' => $target_status,
-			)
-		);
-	}
 
-	if ( ! is_array( $validation ) || empty( $validation['available'] ) ) {
-		return new WP_Error(
-			'mcp_gutenberg_devenia_source_gate_unavailable',
-			'Devenia source-post editorial validation is unavailable. Activate the presentation validation adapter before updating published source posts.'
-		);
+	if ( true === $result || is_wp_error( $result ) ) {
+		return $result;
 	}
-
-	if ( ! empty( $validation['passed'] ) ) {
-		return true;
-	}
-
-	$codes = array();
-	foreach ( (array) ( $validation['issue_codes'] ?? array() ) as $code ) {
-		$codes[] = sanitize_key( (string) $code );
-	}
-	$codes = array_values( array_filter( array_unique( $codes ) ) );
 
 	return new WP_Error(
-		'mcp_gutenberg_devenia_source_gate_failed',
-		sprintf(
-			'Published Devenia source posts must pass the editorial source-design gate before saving. Proposed content failed checks: %s',
-			$codes ? implode( ', ', $codes ) : 'unknown'
-		),
-		$validation
+		'mcp_gutenberg_content_write_preflight_invalid_response',
+		'A registered block-document write policy returned an invalid response.'
 	);
 }
 
@@ -4195,15 +3766,15 @@ function mcp_abilities_gutenberg_update_block_document_post(
 	}
 
 	$target_status = isset( $update_args['post_status'] ) ? (string) $update_args['post_status'] : (string) $post->post_status;
-	$source_guard  = mcp_abilities_gutenberg_validate_devenia_source_design_gate(
+	$content_write_preflight = mcp_abilities_gutenberg_validate_content_write_policy(
 		$post,
 		$target_status,
 		$content,
 		$input,
 		'gutenberg/update-post-blocks'
 	);
-	if ( is_wp_error( $source_guard ) ) {
-		return $source_guard;
+	if ( is_wp_error( $content_write_preflight ) ) {
+		return $content_write_preflight;
 	}
 
 	$update_args = array_merge(
