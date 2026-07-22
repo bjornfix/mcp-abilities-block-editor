@@ -348,6 +348,58 @@ function mcp_abilities_gutenberg_get_template_entity( string $post_type, array $
 }
 
 /**
+ * Persist one block-document entity through the canonical write seam.
+ *
+ * @param string              $post_type Entity post type.
+ * @param int                 $post_id Existing ID, or zero for create.
+ * @param array<string,mixed> $postarr Proposed WordPress payload.
+ * @param array<string,mixed> $input Ability input.
+ * @param string              $ability Calling ability.
+ * @return int|WP_Error
+ */
+function mcp_abilities_gutenberg_persist_content_entity( string $post_type, int $post_id, array $postarr, array $input, string $ability ) {
+	$post = $post_id > 0 ? get_post( $post_id ) : null;
+	if ( $post_id > 0 && ( ! $post instanceof WP_Post || $post_type !== $post->post_type ) ) {
+		return new WP_Error( 'mcp_gutenberg_content_entity_not_found', 'Requested block-document entity not found.' );
+	}
+
+	$object = get_post_type_object( $post_type );
+	$can_edit = $post instanceof WP_Post
+		? current_user_can( 'edit_post', $post_id )
+		: current_user_can( $object && ! empty( $object->cap->create_posts ) ? (string) $object->cap->create_posts : 'edit_posts' );
+	if ( ! $can_edit ) {
+		return new WP_Error( 'mcp_gutenberg_content_entity_edit_forbidden', 'You are not allowed to write this block-document entity.' );
+	}
+
+	$status = sanitize_key( (string) ( $postarr['post_status'] ?? ( $post instanceof WP_Post ? $post->post_status : 'draft' ) ) );
+	if ( in_array( $status, array( 'publish', 'future', 'private' ), true ) ) {
+		$publish_cap = $object && ! empty( $object->cap->publish_posts ) ? (string) $object->cap->publish_posts : 'publish_posts';
+		if ( ! current_user_can( $publish_cap ) ) {
+			return new WP_Error( 'mcp_gutenberg_content_entity_publish_forbidden', 'You are not allowed to publish this block-document entity.' );
+		}
+	}
+
+	$policy = mcp_abilities_gutenberg_validate_content_write_policy(
+		$post instanceof WP_Post ? $post : null,
+		$post_type,
+		$status,
+		(string) ( $postarr['post_content'] ?? '' ),
+		array_merge( $input, array( 'content_write_operation' => $post instanceof WP_Post ? 'update' : 'create' ) ),
+		$ability
+	);
+	if ( is_wp_error( $policy ) ) {
+		return $policy;
+	}
+
+	if ( $post instanceof WP_Post ) {
+		$postarr['ID'] = $post_id;
+		return wp_update_post( wp_slash( $postarr ), true );
+	}
+
+	return wp_insert_post( wp_slash( $postarr ), true );
+}
+
+/**
  * Create or update a template entity.
  *
  * @param string $post_type Post type.
@@ -387,20 +439,9 @@ function mcp_abilities_gutenberg_save_template_entity( string $post_type, array 
 		'post_content' => $content,
 	);
 
-	if ( $post_id > 0 ) {
-		$post = get_post( $post_id );
-		if ( ! $post || $post_type !== $post->post_type ) {
-			return array(
-				'success' => false,
-				'message' => 'Template entity not found.',
-			);
-		}
-		$postarr['ID'] = $post_id;
-		$result        = wp_update_post( wp_slash( $postarr ), true );
-	} else {
-		$result = wp_insert_post( wp_slash( $postarr ), true );
-		$post_id = is_wp_error( $result ) ? 0 : (int) $result;
-	}
+	$was_update = $post_id > 0;
+	$result = mcp_abilities_gutenberg_persist_content_entity( $post_type, $post_id, $postarr, $input, (string) ( $input['content_write_ability'] ?? 'gutenberg/save-' . $post_type ) );
+	$post_id = is_wp_error( $result ) ? 0 : (int) $result;
 
 	if ( is_wp_error( $result ) ) {
 		return mcp_abilities_gutenberg_error_response( $result );
@@ -417,7 +458,7 @@ function mcp_abilities_gutenberg_save_template_entity( string $post_type, array 
 
 	return array(
 		'success' => true,
-		'message' => $postarr['ID'] ?? null ? 'Template entity updated successfully.' : 'Template entity created successfully.',
+		'message' => $was_update ? 'Template entity updated successfully.' : 'Template entity created successfully.',
 		'entity'  => array(
 			'id'       => (int) $post_id,
 			'slug'     => $saved ? (string) $saved->post_name : $slug,
@@ -542,20 +583,9 @@ function mcp_abilities_gutenberg_save_synced_pattern( array $input ): array {
 		'post_content' => $content,
 	);
 
-	if ( $post_id > 0 ) {
-		$post = get_post( $post_id );
-		if ( ! $post || 'wp_block' !== $post->post_type ) {
-			return array(
-				'success' => false,
-				'message' => 'Synced pattern not found.',
-			);
-		}
-		$postarr['ID'] = $post_id;
-		$result        = wp_update_post( wp_slash( $postarr ), true );
-	} else {
-		$result  = wp_insert_post( wp_slash( $postarr ), true );
-		$post_id = is_wp_error( $result ) ? 0 : (int) $result;
-	}
+	$was_update = $post_id > 0;
+	$result = mcp_abilities_gutenberg_persist_content_entity( 'wp_block', $post_id, $postarr, $input, (string) ( $input['content_write_ability'] ?? 'gutenberg/save-synced-pattern' ) );
+	$post_id = is_wp_error( $result ) ? 0 : (int) $result;
 
 	if ( is_wp_error( $result ) ) {
 		return mcp_abilities_gutenberg_error_response( $result );
@@ -565,7 +595,7 @@ function mcp_abilities_gutenberg_save_synced_pattern( array $input ): array {
 
 	return array(
 		'success' => true,
-		'message' => $postarr['ID'] ?? null ? 'Synced pattern updated successfully.' : 'Synced pattern created successfully.',
+		'message' => $was_update ? 'Synced pattern updated successfully.' : 'Synced pattern created successfully.',
 		'pattern' => array(
 			'id'       => (int) $post_id,
 			'slug'     => $saved ? (string) $saved->post_name : $slug,
@@ -657,7 +687,7 @@ function mcp_abilities_gutenberg_extract_synced_pattern( array $input ): array {
 			$result = mcp_abilities_gutenberg_update_block_document_post(
 				$post,
 				$content,
-				$input,
+				array_merge( $input, array( 'content_write_ability' => 'gutenberg/extract-synced-pattern', 'content_write_operation' => 'extract' ) ),
 				array(),
 				'Synced pattern extracted and source replaced with pattern reference.',
 				false
@@ -751,7 +781,7 @@ function mcp_abilities_gutenberg_insert_synced_pattern_into_post( array $input )
 	$result = mcp_abilities_gutenberg_update_block_document_post(
 		$post,
 		$content,
-		$input,
+		array_merge( $input, array( 'content_write_ability' => 'gutenberg/insert-synced-pattern-into-post', 'content_write_operation' => 'insert' ) ),
 		array(),
 		'Synced pattern reference inserted successfully.'
 	);
@@ -886,20 +916,9 @@ function mcp_abilities_gutenberg_save_navigation_entity( array $input ): array {
 		'post_content' => $content,
 	);
 
-	if ( $post_id > 0 ) {
-		$post = get_post( $post_id );
-		if ( ! $post || 'wp_navigation' !== $post->post_type ) {
-			return array(
-				'success' => false,
-				'message' => 'Navigation not found.',
-			);
-		}
-		$postarr['ID'] = $post_id;
-		$result        = wp_update_post( wp_slash( $postarr ), true );
-	} else {
-		$result  = wp_insert_post( wp_slash( $postarr ), true );
-		$post_id = is_wp_error( $result ) ? 0 : (int) $result;
-	}
+	$was_update = $post_id > 0;
+	$result = mcp_abilities_gutenberg_persist_content_entity( 'wp_navigation', $post_id, $postarr, $input, (string) ( $input['content_write_ability'] ?? 'gutenberg/save-navigation' ) );
+	$post_id = is_wp_error( $result ) ? 0 : (int) $result;
 
 	if ( is_wp_error( $result ) ) {
 		return mcp_abilities_gutenberg_error_response( $result );
@@ -909,7 +928,7 @@ function mcp_abilities_gutenberg_save_navigation_entity( array $input ): array {
 
 	return array(
 		'success' => true,
-		'message' => $postarr['ID'] ?? null ? 'Navigation updated successfully.' : 'Navigation created successfully.',
+		'message' => $was_update ? 'Navigation updated successfully.' : 'Navigation created successfully.',
 		'navigation' => array(
 			'id'       => (int) $post_id,
 			'slug'     => $saved ? (string) $saved->post_name : $slug,

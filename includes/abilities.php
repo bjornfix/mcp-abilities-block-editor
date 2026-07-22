@@ -1757,7 +1757,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				return mcp_abilities_gutenberg_save_template_entity( 'wp_template', is_array( $input ) ? $input : array() );
+				return mcp_abilities_gutenberg_save_template_entity( 'wp_template', array_merge( is_array( $input ) ? $input : array(), array( 'content_write_ability' => 'gutenberg/create-template' ) ) );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
@@ -1808,7 +1808,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				return mcp_abilities_gutenberg_save_template_entity( 'wp_template', is_array( $input ) ? $input : array() );
+				return mcp_abilities_gutenberg_save_template_entity( 'wp_template', array_merge( is_array( $input ) ? $input : array(), array( 'content_write_ability' => 'gutenberg/update-template' ) ) );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
@@ -1912,7 +1912,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				return mcp_abilities_gutenberg_save_template_entity( 'wp_template_part', is_array( $input ) ? $input : array() );
+				return mcp_abilities_gutenberg_save_template_entity( 'wp_template_part', array_merge( is_array( $input ) ? $input : array(), array( 'content_write_ability' => 'gutenberg/create-template-part' ) ) );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
@@ -1964,7 +1964,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				return mcp_abilities_gutenberg_save_template_entity( 'wp_template_part', is_array( $input ) ? $input : array() );
+				return mcp_abilities_gutenberg_save_template_entity( 'wp_template_part', array_merge( is_array( $input ) ? $input : array(), array( 'content_write_ability' => 'gutenberg/update-template-part' ) ) );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
@@ -2097,7 +2097,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				return mcp_abilities_gutenberg_save_navigation_entity( is_array( $input ) ? $input : array() );
+				return mcp_abilities_gutenberg_save_navigation_entity( array_merge( is_array( $input ) ? $input : array(), array( 'content_write_ability' => 'gutenberg/create-navigation' ) ) );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
@@ -2147,7 +2147,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				return mcp_abilities_gutenberg_save_navigation_entity( is_array( $input ) ? $input : array() );
+				return mcp_abilities_gutenberg_save_navigation_entity( array_merge( is_array( $input ) ? $input : array(), array( 'content_write_ability' => 'gutenberg/update-navigation' ) ) );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_site_editor_permission_callback',
 			'meta'                => array(
@@ -2337,6 +2337,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'default'     => false,
 						'description' => 'Allow upsert to replace an existing page even when GenerateBlocks/design markup would be removed. Defaults to false.',
 					),
+					'content_write_mode' => array( 'type' => 'string', 'enum' => array( 'guarded', 'full_rebuild' ), 'default' => 'guarded' ),
 					'status' => array(
 						'type'        => 'string',
 						'description' => 'Page status.',
@@ -2368,7 +2369,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_create_page_from_input( is_array( $input ) ? $input : array() );
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_content_write_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
@@ -2415,7 +2416,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				return mcp_abilities_gutenberg_save_synced_pattern( is_array( $input ) ? $input : array() );
+				return mcp_abilities_gutenberg_save_synced_pattern( array_merge( is_array( $input ) ? $input : array(), array( 'content_write_ability' => 'gutenberg/create-synced-pattern' ) ) );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
 			'meta'                => array(
@@ -2465,7 +2466,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				return mcp_abilities_gutenberg_save_synced_pattern( is_array( $input ) ? $input : array() );
+				return mcp_abilities_gutenberg_save_synced_pattern( array_merge( is_array( $input ) ? $input : array(), array( 'content_write_ability' => 'gutenberg/update-synced-pattern' ) ) );
 			},
 			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
 			'meta'                => array(
@@ -2613,6 +2614,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'default'     => false,
 						'description' => 'Allow upsert to replace an existing page even when GenerateBlocks/design markup would be removed. Defaults to false.',
 					),
+					'content_write_mode' => array( 'type' => 'string', 'enum' => array( 'guarded', 'full_rebuild' ), 'default' => 'guarded' ),
 					'status' => array(
 						'type'        => 'string',
 						'description' => 'Page status.',
@@ -2636,7 +2638,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				return mcp_abilities_gutenberg_create_page_from_pattern( is_array( $input ) ? $input : array() );
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_content_write_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
@@ -2728,6 +2730,8 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'content'              => $payload['content'],
 						'upsert_matching_slug' => ! empty( $input['upsert_matching_slug'] ),
 						'allow_design_markup_loss' => ! empty( $input['allow_design_markup_loss'] ),
+						'content_write_ability' => 'gutenberg/create-landing-page',
+						'content_write_operation' => 'create',
 					)
 				);
 
@@ -2737,7 +2741,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 
 				return $create;
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_content_write_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
@@ -2776,6 +2780,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'default'     => false,
 						'description' => 'Allow replace mode to remove existing GenerateBlocks/design markup. Defaults to false.',
 					),
+					'content_write_mode' => array( 'type' => 'string', 'enum' => array( 'guarded', 'full_rebuild' ), 'default' => 'guarded' ),
 				),
 				'additionalProperties' => false,
 			),
@@ -3529,6 +3534,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 						'default'     => false,
 						'description' => 'Allow replacing content even when existing GenerateBlocks/design markup would be removed. Defaults to false.',
 					),
+					'content_write_mode' => array( 'type' => 'string', 'enum' => array( 'guarded', 'full_rebuild' ), 'default' => 'guarded' ),
 				),
 				'additionalProperties' => false,
 			),
@@ -3576,7 +3582,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 				$result = mcp_abilities_gutenberg_update_block_document_post(
 					$post,
 					$content,
-					is_array( $input ) ? $input : array(),
+					array_merge( is_array( $input ) ? $input : array(), array( 'content_write_ability' => 'gutenberg/update-post-blocks', 'content_write_operation' => 'update' ) ),
 					$update_args,
 					'Post updated successfully.'
 				);
@@ -3586,7 +3592,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 
 				return $result;
 			},
-			'permission_callback' => 'mcp_abilities_gutenberg_permission_callback',
+			'permission_callback' => 'mcp_abilities_gutenberg_content_write_permission_callback',
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,

@@ -3587,14 +3587,12 @@ function mcp_abilities_gutenberg_assert_layout_safe_for_write( string $content )
  */
 function mcp_abilities_gutenberg_detect_design_markup_markers( string $content ): array {
 	$markers = array();
-
-	if ( false !== strpos( $content, '<!-- wp:generateblocks/' ) || false !== strpos( $content, 'gb-container-' ) || false !== strpos( $content, 'gb-grid-wrapper-' ) || false !== strpos( $content, 'gb-headline-' ) || false !== strpos( $content, 'gb-button-' ) ) {
-		$markers[] = 'generateblocks';
+	if ( preg_match( '/<!--\s+wp:(?:group|columns|cover|media-text)\b/', $content ) ) {
+		$markers[] = 'core-layout';
 	}
-
-	$filtered_markers = apply_filters( 'mcp_abilities_gutenberg_design_markup_markers', $markers, $content );
+	$filtered_markers = apply_filters( 'mcp_content_design_markup_markers', array(), $content );
 	if ( is_array( $filtered_markers ) ) {
-		$markers = $filtered_markers;
+		$markers = array_merge( $markers, $filtered_markers );
 	}
 
 	return array_values( array_unique( array_filter( array_map( 'sanitize_key', $markers ) ) ) );
@@ -3609,7 +3607,7 @@ function mcp_abilities_gutenberg_detect_design_markup_markers( string $content )
  * @return true|WP_Error
  */
 function mcp_abilities_gutenberg_assert_design_markup_preserved( string $old_content, string $new_content, array $input ) {
-	if ( ! empty( $input['allow_design_markup_loss'] ) ) {
+	if ( 'full_rebuild' === ( $input['content_write_mode'] ?? 'guarded' ) || ! empty( $input['allow_design_markup_loss'] ) ) {
 		return true;
 	}
 
@@ -3692,24 +3690,29 @@ function mcp_abilities_gutenberg_assert_block_document_write_safe( string $conte
 /**
  * Run optional site policy before a block-document write mutates WordPress.
  *
- * @param WP_Post             $post          Existing post.
+ * @param WP_Post|null        $post          Existing post when updating.
+ * @param string              $post_type     Target post type.
  * @param string              $target_status Target status after the update.
  * @param string              $content       Proposed post content.
  * @param array<string,mixed> $input         Ability input.
  * @param string              $ability       Calling ability.
  * @return true|WP_Error
  */
-function mcp_abilities_gutenberg_validate_content_write_policy( WP_Post $post, string $target_status, string $content, array $input, string $ability ) {
+function mcp_abilities_gutenberg_validate_content_write_policy( ?WP_Post $post, string $post_type, string $target_status, string $content, array $input, string $ability ) {
+	$operation  = sanitize_key( (string) ( $input['content_write_operation'] ?? ( null === $post ? 'create' : 'update' ) ) );
+	$write_mode = sanitize_key( (string) ( $input['content_write_mode'] ?? 'guarded' ) );
 	$result = apply_filters(
-		'mcp_abilities_gutenberg_content_write_preflight',
+		'mcp_content_write_preflight',
 		true,
 		array(
 			'post'          => $post,
-			'post_type'     => (string) $post->post_type,
+			'post_type'     => $post_type,
 			'target_status' => $target_status,
 			'content'       => $content,
 			'input'         => $input,
 			'ability'       => $ability,
+			'operation'     => $operation,
+			'write_mode'    => $write_mode,
 		)
 	);
 
@@ -3768,10 +3771,11 @@ function mcp_abilities_gutenberg_update_block_document_post(
 	$target_status = isset( $update_args['post_status'] ) ? (string) $update_args['post_status'] : (string) $post->post_status;
 	$content_write_preflight = mcp_abilities_gutenberg_validate_content_write_policy(
 		$post,
+		(string) $post->post_type,
 		$target_status,
 		$content,
-		$input,
-		'gutenberg/update-post-blocks'
+		array_merge( $input, array( 'content_write_operation' => (string) ( $input['content_write_operation'] ?? 'update' ) ) ),
+		(string) ( $input['content_write_ability'] ?? 'gutenberg/update-post-blocks' )
 	);
 	if ( is_wp_error( $content_write_preflight ) ) {
 		return $content_write_preflight;

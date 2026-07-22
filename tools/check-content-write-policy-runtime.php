@@ -24,10 +24,10 @@ function add_filter( ...$args ): void { unset( $args ); }
 function is_wp_error( $value ): bool { return $value instanceof WP_Error; }
 function sanitize_key( $value ): string { return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $value ) ) ?: ''; }
 function apply_filters( string $name, $value, ...$args ) {
-	if ( 'mcp_abilities_gutenberg_design_markup_markers' === $name && ! empty( $GLOBALS['invalid_marker_adapter'] ) ) {
+	if ( 'mcp_content_design_markup_markers' === $name && ! empty( $GLOBALS['invalid_marker_adapter'] ) ) {
 		return new WP_Error( 'invalid_adapter_output', 'Fixture invalid marker response.' );
 	}
-	if ( 'mcp_abilities_gutenberg_content_write_preflight' !== $name || empty( $GLOBALS['site_write_policy_enabled'] ) ) {
+	if ( 'mcp_content_write_preflight' !== $name || empty( $GLOBALS['site_write_policy_enabled'] ) ) {
 		return $value;
 	}
 	$GLOBALS['site_write_policy_calls']++;
@@ -41,8 +41,8 @@ function apply_filters( string $name, $value, ...$args ) {
 require_once dirname( __DIR__ ) . '/includes/content-analysis.php';
 
 $GLOBALS['invalid_marker_adapter'] = true;
-$built_in_markers = mcp_abilities_gutenberg_detect_design_markup_markers( '<!-- wp:generateblocks/container --><div></div><!-- /wp:generateblocks/container -->' );
-if ( ! in_array( 'generateblocks', $built_in_markers, true ) ) {
+$built_in_markers = mcp_abilities_gutenberg_detect_design_markup_markers( '<!-- wp:columns --><div></div><!-- /wp:columns -->' );
+if ( ! in_array( 'core-layout', $built_in_markers, true ) ) {
 	throw new RuntimeException( 'Invalid Adapter output discarded built-in guarded design evidence.' );
 }
 $GLOBALS['invalid_marker_adapter'] = false;
@@ -50,6 +50,7 @@ $GLOBALS['invalid_marker_adapter'] = false;
 $page = new WP_Post();
 $result = mcp_abilities_gutenberg_validate_content_write_policy(
 	$page,
+	'page',
 	'publish',
 	'<!-- proposed page -->',
 	array(),
@@ -62,6 +63,7 @@ if ( ! $result instanceof WP_Error || 1 !== $GLOBALS['site_write_policy_calls'] 
 $GLOBALS['site_write_policy_enabled'] = false;
 $without_adapter = mcp_abilities_gutenberg_validate_content_write_policy(
 	$page,
+	'page',
 	'publish',
 	'<!-- page without site Adapter -->',
 	array(),

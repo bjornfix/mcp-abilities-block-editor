@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Block Editor
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
- * Version: 0.20.24
+ * Version: 0.20.25
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -45,6 +45,32 @@ function mcp_abilities_gutenberg_permission_callback(): bool {
 }
 
 /**
+ * Permission callback for post/page write abilities.
+ *
+ * @param array<string,mixed> $input Ability input.
+ */
+function mcp_abilities_gutenberg_content_write_permission_callback( $input = array() ): bool {
+	$input   = is_array( $input ) ? $input : array();
+	$post_id = absint( $input['post_id'] ?? 0 );
+	$post    = $post_id ? get_post( $post_id ) : null;
+	$type    = $post instanceof WP_Post ? (string) $post->post_type : 'page';
+	$object  = get_post_type_object( $type );
+	$edit_cap = $post instanceof WP_Post
+		? current_user_can( 'edit_post', $post_id )
+		: current_user_can( $object && ! empty( $object->cap->create_posts ) ? (string) $object->cap->create_posts : 'edit_pages' );
+	if ( ! $edit_cap ) {
+		return false;
+	}
+
+	$status = sanitize_key( (string) ( $input['status'] ?? ( $post instanceof WP_Post ? $post->post_status : 'draft' ) ) );
+	if ( ! in_array( $status, array( 'publish', 'future', 'private' ), true ) ) {
+		return true;
+	}
+
+	return current_user_can( $object && ! empty( $object->cap->publish_posts ) ? (string) $object->cap->publish_posts : 'publish_pages' );
+}
+
+/**
  * Permission callback for site-editor write abilities.
  */
 function mcp_abilities_gutenberg_site_editor_permission_callback(): bool {
@@ -79,6 +105,9 @@ function mcp_abilities_gutenberg_register_category(): void {
  * @return void
  */
 function mcp_abilities_gutenberg_register_ability( string $name, array $args ): void {
+	if ( ! isset( $args['category'] ) || ! is_string( $args['category'] ) || '' === $args['category'] ) {
+		$args['category'] = 'block-editor';
+	}
 	if (
 		isset( $args['input_schema'] )
 		&& is_array( $args['input_schema'] )

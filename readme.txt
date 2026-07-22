@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 0.20.24
+Stable tag: 0.20.25
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,11 @@ Requires the Abilities API plugin.
 3. Discover the new `gutenberg/*` abilities through your MCP layer.
 
 == Changelog ==
+
+= 0.20.25 =
+* Route new pages and every block-document mutation through the canonical neutral Content Write Gate.
+* Preserve exact caller operation identity and support the shared full_rebuild write mode.
+* Move GenerateBlocks marker ownership to the GeneratePress Adapter.
 
 = 0.20.24 =
 * Adds neutral site-policy seams for block-document write preflight and protected design markers.

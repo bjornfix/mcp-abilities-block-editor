@@ -1004,6 +1004,14 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 	}
 
 	$existing_post = '' !== $slug ? mcp_abilities_gutenberg_find_page_by_slug( $slug ) : null;
+	$permission_input = $input;
+	$permission_input['status'] = $status;
+	if ( $upsert_matching_slug && $existing_post instanceof WP_Post ) {
+		$permission_input['post_id'] = (int) $existing_post->ID;
+	}
+	if ( ! mcp_abilities_gutenberg_content_write_permission_callback( $permission_input ) ) {
+		return mcp_abilities_gutenberg_error_response( new WP_Error( 'mcp_gutenberg_page_write_forbidden', 'You are not allowed to create, update, or publish this page.' ) );
+	}
 	if ( $upsert_matching_slug && $existing_post instanceof WP_Post ) {
 		$update_result = mcp_abilities_gutenberg_update_block_document_post(
 			$existing_post,
@@ -1026,6 +1034,20 @@ function mcp_abilities_gutenberg_create_page_from_input( array $input ): array {
 	$write_guard = mcp_abilities_gutenberg_assert_block_document_write_safe( $content, $input );
 	if ( is_wp_error( $write_guard ) ) {
 		return mcp_abilities_gutenberg_error_response( $write_guard );
+	}
+
+	$gate_input = $input;
+	$gate_input['content_write_operation'] = 'create';
+	$content_write_preflight = mcp_abilities_gutenberg_validate_content_write_policy(
+		null,
+		'page',
+		$status,
+		$content,
+		$gate_input,
+		(string) ( $input['content_write_ability'] ?? 'gutenberg/create-page-from-blocks' )
+	);
+	if ( is_wp_error( $content_write_preflight ) ) {
+		return mcp_abilities_gutenberg_error_response( $content_write_preflight );
 	}
 
 	$parent_id   = 0;
@@ -1089,6 +1111,8 @@ function mcp_abilities_gutenberg_create_page_from_pattern( array $input ): array
 			'status'               => isset( $input['status'] ) ? (string) $input['status'] : 'draft',
 			'upsert_matching_slug' => ! empty( $input['upsert_matching_slug'] ),
 			'allow_design_markup_loss' => ! empty( $input['allow_design_markup_loss'] ),
+			'content_write_mode'       => (string) ( $input['content_write_mode'] ?? 'guarded' ),
+			'content_write_ability'    => 'gutenberg/create-page-from-pattern',
 			'content'              => (string) $pattern['content'],
 		)
 	);
@@ -1137,7 +1161,7 @@ function mcp_abilities_gutenberg_insert_pattern_into_post( array $input ): array
 	$result = mcp_abilities_gutenberg_update_block_document_post(
 		$post,
 		$content,
-		$input,
+		array_merge( $input, array( 'content_write_ability' => 'gutenberg/insert-pattern-into-post', 'content_write_operation' => 'insert' ) ),
 		array(),
 		'Pattern inserted successfully.'
 	);
