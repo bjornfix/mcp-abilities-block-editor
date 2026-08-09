@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: MCP Abilities - Block Editor
- * Plugin URI: https://github.com/bjornfix/mcp-abilities-block-editor
+ * Plugin URI: https://devenia.com/plugins/mcp-abilities-block-editor/
  * Description: WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
  * Version: 0.20.25
  * Author: basicus
@@ -28,7 +28,7 @@ function mcp_abilities_gutenberg_check_dependencies(): bool {
 		add_action(
 			'admin_notices',
 			function () {
-				echo '<div class="notice notice-error"><p><strong>MCP Abilities - Block Editor</strong> requires the <a href="https://github.com/WordPress/abilities-api">Abilities API</a> plugin to be installed and activated.</p></div>';
+				echo '<div class="notice notice-error"><p><strong>MCP Abilities - Block Editor</strong> requires the <a href="https://developer.wordpress.org/apis/abilities-api/">WordPress Abilities API</a> in WordPress 6.9 or newer.</p></div>';
 			}
 		);
 		return false;

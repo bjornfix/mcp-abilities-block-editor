@@ -14,6 +14,15 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 
 This plugin adds Gutenberg-focused MCP abilities so block content can be handled as structured data instead of brittle raw markup.
 
+The public surface covers four complete jobs:
+
+* Inspect the active theme, block styles, registered blocks, categories, patterns, synced patterns, and reusable authoring guidance before creating content.
+* Generate sections, query sections, and landing pages, then validate structure, design, copy, links, media use, and rendered context before saving.
+* Read and manage block-theme templates, template parts, navigation entities, synced patterns, and their usage relationships.
+* Parse, serialize, transform, lock, insert, duplicate, move, bind, text-edit, normalize, and save nested Gutenberg block trees.
+
+Write operations use normal WordPress object permissions. Post and page writes also pass through the shared content-write policy before WordPress stores the block document. Site Editor writes require the WordPress capability for editing theme options.
+
 Included abilities:
 
 - `gutenberg/get-theme-context`
@@ -125,13 +134,16 @@ Common guidance built into the plugin:
 - grouped wrapped sections -> `core/group`
 - hero/banner sections -> `core/cover`
 
-Requires the Abilities API plugin.
+Required components are documented with exact authoritative links in `DEPENDENCIES.md`.
+
+Download the stable plugin ZIP from https://downloads.devenia.com/mcp-abilities-block-editor.zip.
 
 == Installation ==
 
-1. Install and activate Abilities API.
-2. Install and activate this plugin.
-3. Discover the new `gutenberg/*` abilities through your MCP layer.
+1. Use WordPress 6.9 or newer with the WordPress Abilities API.
+2. Install and activate the WordPress MCP Adapter.
+3. Install and activate this plugin.
+4. Discover the new `gutenberg/*` abilities through your MCP client.
 
 == Changelog ==
 

@@ -8,13 +8,17 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 0.20.24
+**Stable tag:** 0.20.25
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
 ## What It Does
 
 WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, and update Gutenberg content safely.
+
+The plugin covers four complete jobs: authoring-context inspection, structured generation and quality checks, Site Editor object management, and safe nested block-tree mutation. WordPress remains the authority for object permissions and stored block documents.
+
+[Download the stable plugin ZIP](https://downloads.devenia.com/mcp-abilities-block-editor.zip)
 
 This plugin is part of the MCP abilities ecosystem. It gives an MCP-capable agent a focused, authenticated way to work with Block Editor work inside WordPress through MCP.
 
@@ -107,7 +111,7 @@ If you are new to the stack, use this order:
 
 If you skip base-stack verification and start with add-ons immediately, troubleshooting gets harder than it needs to be.
 
-## Abilities (65)
+## Abilities (67)
 
 | Ability | Description |
 |---------|-------------|
