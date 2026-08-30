@@ -7,6 +7,125 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Gutenberg content analysis, design review, copy review, and write-safety guardrails.
  */
+
+/**
+ * Return the semantic HTML tag declared by a normalized block.
+ *
+ * Block providers use different attribute names for the same public HTML
+ * contract. Analyze that contract instead of maintaining a vendor block list.
+ *
+ * @param array<string,mixed> $block Normalized block.
+ */
+function mcp_abilities_gutenberg_block_semantic_tag( array $block ): string {
+	$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+	foreach ( array( 'tagName', 'element' ) as $key ) {
+		if ( ! empty( $attrs[ $key ] ) && is_string( $attrs[ $key ] ) ) {
+			return strtolower( trim( $attrs[ $key ] ) );
+		}
+	}
+
+	$inner_html = isset( $block['inner_html'] ) ? ltrim( (string) $block['inner_html'] ) : '';
+	if ( preg_match( '/^<([a-z][a-z0-9-]*)\b/i', $inner_html, $matches ) ) {
+		return strtolower( (string) $matches[1] );
+	}
+
+	return '';
+}
+
+/**
+ * Return class tokens declared by a normalized block and its saved tag.
+ *
+ * @param array<string,mixed> $block Normalized block.
+ * @return array<int,string>
+ */
+function mcp_abilities_gutenberg_block_class_tokens( array $block ): array {
+	$attrs   = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+	$classes = array();
+
+	if ( ! empty( $attrs['className'] ) && is_string( $attrs['className'] ) ) {
+		$classes = array_merge( $classes, preg_split( '/\s+/', trim( $attrs['className'] ) ) ?: array() );
+	}
+	if ( ! empty( $attrs['globalClasses'] ) && is_array( $attrs['globalClasses'] ) ) {
+		$classes = array_merge( $classes, array_map( 'strval', $attrs['globalClasses'] ) );
+	}
+
+	$inner_html = isset( $block['inner_html'] ) ? (string) $block['inner_html'] : '';
+	if ( preg_match( '/^\s*<[a-z][a-z0-9-]*\b[^>]*\bclass=[\'\"]([^\'\"]*)[\'\"]/i', $inner_html, $matches ) ) {
+		$classes = array_merge( $classes, preg_split( '/\s+/', trim( (string) $matches[1] ) ) ?: array() );
+	}
+
+	return array_values( array_unique( array_filter( array_map( 'sanitize_html_class', $classes ) ) ) );
+}
+
+/**
+ * Return one declared or saved HTML attribute from a normalized block.
+ *
+ * @param array<string,mixed> $block Normalized block.
+ * @return string|null
+ */
+function mcp_abilities_gutenberg_block_html_attribute( array $block, string $attribute ): ?string {
+	$attribute = strtolower( trim( $attribute ) );
+	if ( '' === $attribute || ! preg_match( '/^[a-z][a-z0-9_-]*$/', $attribute ) ) {
+		return null;
+	}
+
+	$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+	if ( isset( $attrs['htmlAttributes'] ) && is_array( $attrs['htmlAttributes'] ) && array_key_exists( $attribute, $attrs['htmlAttributes'] ) ) {
+		return (string) $attrs['htmlAttributes'][ $attribute ];
+	}
+	if ( array_key_exists( $attribute, $attrs ) ) {
+		return (string) $attrs[ $attribute ];
+	}
+
+	$inner_html = isset( $block['inner_html'] ) ? (string) $block['inner_html'] : '';
+	if ( preg_match( '/^\s*<[a-z][a-z0-9-]*\b[^>]*\b' . preg_quote( $attribute, '/' ) . '=[\'\"]([^\'\"]*)[\'\"]/i', $inner_html, $matches ) ) {
+		return html_entity_decode( (string) $matches[1], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+	}
+
+	return null;
+}
+
+/**
+ * Return heading entries emitted by one normalized block.
+ *
+ * @param array<string,mixed> $block Normalized block.
+ * @return array<int,array{level:int,text:string}>
+ */
+function mcp_abilities_gutenberg_block_heading_entries( array $block ): array {
+	$attrs      = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+	$inner_html = isset( $block['inner_html'] ) ? (string) $block['inner_html'] : '';
+	$entries    = array();
+
+	if ( preg_match_all( '/<h([1-6])\b[^>]*>(.*?)<\/h\1>/is', $inner_html, $matches, PREG_SET_ORDER ) ) {
+		foreach ( $matches as $match ) {
+			$entries[] = array(
+				'level' => (int) $match[1],
+				'text'  => trim( wp_strip_all_tags( (string) $match[2] ) ),
+			);
+		}
+		return $entries;
+	}
+
+	$tag = mcp_abilities_gutenberg_block_semantic_tag( $block );
+	if ( preg_match( '/^h([1-6])$/', $tag, $matches ) ) {
+		return array(
+			array(
+				'level' => (int) $matches[1],
+				'text'  => trim( wp_strip_all_tags( $inner_html ) ),
+			),
+		);
+	}
+
+	if ( 'core/heading' === (string) ( $block['block_name'] ?? '' ) ) {
+		$entries[] = array(
+			'level' => isset( $attrs['level'] ) ? (int) $attrs['level'] : 2,
+			'text'  => trim( wp_strip_all_tags( $inner_html ) ),
+		);
+	}
+
+	return $entries;
+}
+
 /**
  * Collect heading outline from a normalized block tree.
  *
@@ -17,15 +136,11 @@ function mcp_abilities_gutenberg_collect_outline( array $blocks ): array {
 	$outline = array();
 
 	foreach ( $blocks as $block ) {
-		$name = isset( $block['block_name'] ) ? (string) $block['block_name'] : '';
-		if ( 'core/heading' === $name ) {
-			$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
-			$text  = trim( wp_strip_all_tags( (string) ( $block['inner_html'] ?? '' ) ) );
-			$outline[] = array(
-				'level' => isset( $attrs['level'] ) ? (int) $attrs['level'] : 2,
-				'text'  => $text,
-			);
+		if ( ! is_array( $block ) ) {
+			continue;
 		}
+
+		$outline = array_merge( $outline, mcp_abilities_gutenberg_block_heading_entries( $block ) );
 
 		if ( ! empty( $block['inner_blocks'] ) && is_array( $block['inner_blocks'] ) ) {
 			$outline = array_merge( $outline, mcp_abilities_gutenberg_collect_outline( $block['inner_blocks'] ) );
@@ -33,6 +148,56 @@ function mcp_abilities_gutenberg_collect_outline( array $blocks ): array {
 	}
 
 	return $outline;
+}
+
+/**
+ * Determine whether one block is a semantic action control.
+ *
+ * @param array<string,mixed> $block Normalized block.
+ */
+function mcp_abilities_gutenberg_block_is_semantic_action( array $block ): bool {
+	$name = isset( $block['block_name'] ) ? (string) $block['block_name'] : '';
+	if ( in_array( $name, array( 'core/button', 'core/buttons' ), true ) ) {
+		return true;
+	}
+
+	$tag = mcp_abilities_gutenberg_block_semantic_tag( $block );
+	if ( 'button' === $tag ) {
+		return true;
+	}
+	if ( 'a' !== $tag ) {
+		return false;
+	}
+
+	foreach ( mcp_abilities_gutenberg_block_class_tokens( $block ) as $class ) {
+		if ( preg_match( '/(?:^|[-_])button(?:$|[-_])/', strtolower( $class ) ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Determine whether a normalized block tree contains an action control.
+ *
+ * @param array<int,array<string,mixed>> $blocks Normalized blocks.
+ */
+function mcp_abilities_gutenberg_has_semantic_action( array $blocks ): bool {
+	foreach ( $blocks as $block ) {
+		if ( ! is_array( $block ) ) {
+			continue;
+		}
+		if ( mcp_abilities_gutenberg_block_is_semantic_action( $block ) ) {
+			return true;
+		}
+		$inner_blocks = isset( $block['inner_blocks'] ) && is_array( $block['inner_blocks'] ) ? $block['inner_blocks'] : array();
+		if ( $inner_blocks && mcp_abilities_gutenberg_has_semantic_action( $inner_blocks ) ) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 /**
@@ -51,11 +216,15 @@ function mcp_abilities_gutenberg_collect_links( array $blocks ): array {
 				$links[] = $attrs[ $key ];
 			}
 		}
+		$declared_href = mcp_abilities_gutenberg_block_html_attribute( $block, 'href' );
+		if ( null !== $declared_href && '' !== $declared_href ) {
+			$links[] = $declared_href;
+		}
 
 		$inner_html = isset( $block['inner_html'] ) ? (string) $block['inner_html'] : '';
 		if ( '' !== $inner_html && preg_match_all( '/href=[\'"]([^\'"]+)[\'"]/', $inner_html, $matches ) ) {
 			foreach ( $matches[1] as $url ) {
-				$links[] = (string) $url;
+				$links[] = html_entity_decode( (string) $url, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			}
 		}
 
@@ -77,16 +246,22 @@ function mcp_abilities_gutenberg_collect_media_refs( array $blocks ): array {
 	$items = array();
 
 	foreach ( $blocks as $block ) {
+		if ( ! is_array( $block ) ) {
+			continue;
+		}
 		$attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
 		$name  = isset( $block['block_name'] ) ? (string) $block['block_name'] : '';
+		$tag   = mcp_abilities_gutenberg_block_semantic_tag( $block );
 
-		if ( in_array( $name, array( 'core/image', 'core/cover', 'core/media-text', 'core/gallery' ), true ) ) {
+		if ( in_array( $name, array( 'core/image', 'core/cover', 'core/media-text', 'core/gallery' ), true ) || in_array( $tag, array( 'img', 'picture', 'video' ), true ) ) {
+			$url = mcp_abilities_gutenberg_block_html_attribute( $block, 'src' );
+			$alt = mcp_abilities_gutenberg_block_html_attribute( $block, 'alt' );
 			$item = array(
 				'block_name'     => $name,
 				'attachment_id'  => isset( $attrs['id'] ) ? (int) $attrs['id'] : 0,
-				'url'            => isset( $attrs['url'] ) ? (string) $attrs['url'] : '',
+				'url'            => null !== $url ? $url : ( isset( $attrs['url'] ) ? (string) $attrs['url'] : '' ),
 				'media_link'     => isset( $attrs['linkDestination'] ) ? (string) $attrs['linkDestination'] : '',
-				'alt'            => isset( $attrs['alt'] ) ? (string) $attrs['alt'] : '',
+				'alt'            => null !== $alt ? $alt : ( isset( $attrs['alt'] ) ? (string) $attrs['alt'] : '' ),
 			);
 			$items[] = $item;
 		}
@@ -4228,21 +4403,25 @@ function mcp_abilities_gutenberg_audit_content( string $content ): array {
 
 	$walker = function ( array $nodes ) use ( &$walker, &$issues ): void {
 		foreach ( $nodes as $node ) {
+			if ( ! is_array( $node ) ) {
+				continue;
+			}
 			$name  = isset( $node['block_name'] ) ? (string) $node['block_name'] : '';
 			$attrs = isset( $node['attrs'] ) && is_array( $node['attrs'] ) ? $node['attrs'] : array();
-			$html  = isset( $node['inner_html'] ) ? (string) $node['inner_html'] : '';
+			$tag   = mcp_abilities_gutenberg_block_semantic_tag( $node );
 
-			if ( 'core/button' === $name ) {
-				if ( false === strpos( $html, 'href=' ) ) {
+			if ( 'core/buttons' !== $name && mcp_abilities_gutenberg_block_is_semantic_action( $node ) ) {
+				$href = mcp_abilities_gutenberg_block_html_attribute( $node, 'href' );
+				if ( ( 'a' === $tag || 'core/button' === $name ) && ( null === $href || '' === trim( $href ) ) ) {
 					$issues[] = array(
 						'severity' => 'warning',
 						'code'     => 'button_without_link',
-						'message'  => 'A button block does not include a destination URL.',
+						'message'  => 'A button-style link does not include a destination URL.',
 					);
 				}
 			}
 
-			if ( 'core/image' === $name && empty( $attrs['alt'] ) ) {
+			if ( ( 'core/image' === $name || 'img' === $tag ) && '' === trim( (string) ( mcp_abilities_gutenberg_block_html_attribute( $node, 'alt' ) ?? '' ) ) ) {
 				$issues[] = array(
 					'severity' => 'warning',
 					'code'     => 'image_missing_alt',
@@ -4490,6 +4669,9 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 		'issues'          => $issues,
 		'issue_count'     => count( $issues ),
 		'passes'          => 0 === count( $blocking_issue_types ),
+		'passes_static_checks' => 0 === count( $blocking_issue_types ),
+		'visual_review_required' => true,
+		'visual_review_reason' => 'Static block and markup analysis cannot verify computed layout, optical balance, responsive flow, or color-scheme rendering.',
 		'blocking_issue_count' => count( $blocking_issue_types ),
 		'blocking_issue_types' => $blocking_issue_types,
 		'signals'         => $signals,

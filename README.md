@@ -7,7 +7,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
-**Tested up to:** 7.0
+**Tested up to:** 7.1
 **Stable tag:** 0.20.25
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
@@ -137,7 +137,7 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 | `gutenberg/generate-query-section` | Generate a dynamic `core/query` section |
 | `gutenberg/validate-content` | Validate block-tree shape, mutation safety, and layout-risk styles |
 | `gutenberg/audit-content` | Run Gutenberg-specific QA checks on content structure |
-| `gutenberg/evaluate-design` | Score design coherence and flag layout/design issues |
+| `gutenberg/evaluate-design` | Run static layout/design checks and require rendered browser review for visual approval |
 | `gutenberg/suggest-design-fixes` | Turn design findings into concrete remediation suggestions |
 | `gutenberg/evaluate-copy` | Score copy quality and flag weak writing patterns |
 | `gutenberg/suggest-copy-fixes` | Turn copy findings into rewrite suggestions |
@@ -244,12 +244,19 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 
 - This plugin is Gutenberg-specific and intentionally does not duplicate generic `content/*` or `media/*` abilities from the core plugin.
 - It is designed to keep Gutenberg content as structured data instead of brittle HTML strings.
-- `gutenberg/evaluate-design`, `gutenberg/evaluate-copy`, and `gutenberg/evaluate-render-context` exist to catch weak output before publishing, not just after.
+- `gutenberg/evaluate-design` reports static block/markup findings and always returns `visual_review_required=true`; computed layout, optical balance, responsive flow, and color schemes require a rendered browser review.
+- `gutenberg/evaluate-copy` and `gutenberg/evaluate-render-context` catch copy and wrapper-context defects before publishing.
 - `gutenberg/validate-content` now includes mutation guardrails for static-block edits and layout-risk style detection.
 - Block-document writes expose neutral preflight and protected-marker filters so a site plugin can add policy without coupling this public plugin to that site.
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.25
+- Confirms compatibility metadata through WordPress 7.1.
+- Recognizes semantic headings, button-style links, and media from the saved HTML contract of any block provider.
+- Marks static design evaluation as insufficient for visual approval and requires a rendered browser review.
+- Routes every block-document write through the canonical neutral Content Write Gate.
 
 ### 0.20.24
 - Adds neutral site-policy seams for block-document write preflight and protected design markers.

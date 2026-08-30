@@ -2,7 +2,7 @@
 Contributors: basicus
 Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 8.0
 Stable tag: 0.20.25
 License: GPLv2 or later
@@ -148,6 +148,9 @@ Download the stable plugin ZIP from https://downloads.devenia.com/mcp-abilities-
 == Changelog ==
 
 = 0.20.25 =
+* Confirm compatibility metadata through WordPress 7.1.
+* Recognize semantic headings, button-style links, and media from the saved HTML contract of any block provider.
+* Mark static design evaluation as insufficient for visual approval and require a rendered browser review.
 * Route new pages and every block-document mutation through the canonical neutral Content Write Gate.
 * Preserve exact caller operation identity and support the shared full_rebuild write mode.
 * Move GenerateBlocks marker ownership to the GeneratePress Adapter.

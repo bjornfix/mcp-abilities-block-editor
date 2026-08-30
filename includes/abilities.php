@@ -1069,7 +1069,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		'gutenberg/evaluate-design',
 		array(
 			'label'               => 'Evaluate Gutenberg Design',
-			'description'         => 'Evaluate Gutenberg design coherence and flag width-rhythm drift, sibling-treatment mismatches, and risky full-width breakout combinations.',
+			'description'         => 'Run static Gutenberg design checks for width rhythm, repeated treatments, and risky breakouts. A rendered browser review is always required for visual approval.',
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
