@@ -8,7 +8,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.1
-**Stable tag:** 0.20.25
+**Stable tag:** 0.20.26
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -245,12 +245,17 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - This plugin is Gutenberg-specific and intentionally does not duplicate generic `content/*` or `media/*` abilities from the core plugin.
 - It is designed to keep Gutenberg content as structured data instead of brittle HTML strings.
 - `gutenberg/evaluate-design` reports static block/markup findings and always returns `visual_review_required=true`; computed layout, optical balance, responsive flow, and color schemes require a rendered browser review.
+- Design providers can append external stylesheet entries through `mcp_block_editor_design_context`; the evaluator uses their actual CSS without learning provider-specific classes.
 - `gutenberg/evaluate-copy` and `gutenberg/evaluate-render-context` catch copy and wrapper-context defects before publishing.
 - `gutenberg/validate-content` now includes mutation guardrails for static-block edits and layout-risk style detection.
 - Block-document writes expose neutral preflight and protected-marker filters so a site plugin can add policy without coupling this public plugin to that site.
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.26
+- Adds a provider-neutral design-context filter for external stylesheets.
+- Blocks static design acceptance when a section lead uses the same contained surface as repeated item siblings.
 
 ### 0.20.25
 - Confirms compatibility metadata through WordPress 7.1.

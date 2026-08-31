@@ -1069,7 +1069,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		'gutenberg/evaluate-design',
 		array(
 			'label'               => 'Evaluate Gutenberg Design',
-			'description'         => 'Run static Gutenberg design checks for width rhythm, repeated treatments, and risky breakouts. A rendered browser review is always required for visual approval.',
+			'description'         => 'Run static Gutenberg design checks for width rhythm, section hierarchy, repeated treatments, and risky breakouts. A rendered browser review is always required for visual approval.',
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -1130,7 +1130,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 		'gutenberg/suggest-design-fixes',
 		array(
 			'label'               => 'Suggest Gutenberg Design Fixes',
-			'description'         => 'Return concrete design-fix suggestions for width-rhythm drift, sibling-treatment mismatches, weak button contrast, trailing gaps, and risky full-width breakouts.',
+			'description'         => 'Return concrete design-fix suggestions for width rhythm, section hierarchy, sibling-treatment mismatches, weak button contrast, trailing gaps, and risky full-width breakouts.',
 			'category'            => 'block-editor',
 			'input_schema'        => array(
 				'type'                 => 'object',

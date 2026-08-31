@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.20.25
+Stable tag: 0.20.26
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -146,6 +146,10 @@ Download the stable plugin ZIP from https://downloads.devenia.com/mcp-abilities-
 4. Discover the new `gutenberg/*` abilities through your MCP client.
 
 == Changelog ==
+
+= 0.20.26 =
+* Add a provider-neutral design-context filter for external stylesheets.
+* Block static design acceptance when a section lead uses the same contained surface as repeated item siblings.
 
 = 0.20.25 =
 * Confirm compatibility metadata through WordPress 7.1.

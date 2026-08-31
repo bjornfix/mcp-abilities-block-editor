@@ -649,6 +649,7 @@ function mcp_abilities_gutenberg_is_blocking_design_issue( string $type ): bool 
 		$type,
 		array(
 			'section_width_inconsistency_risk',
+			'section_lead_peer_treatment_risk',
 			'internal_measure_mismatch',
 			'support_module_cramp_risk',
 			'followup_cluster_detachment_risk',
@@ -1683,6 +1684,330 @@ function mcp_abilities_gutenberg_extract_embedded_css_entries( string $content )
 	}
 
 	return $entries;
+}
+
+/**
+ * Normalize stylesheet entries supplied to the static design evaluator.
+ *
+ * @param mixed $entries Candidate stylesheet entries.
+ * @return array<int,array{source:string,css:string}>
+ */
+function mcp_abilities_gutenberg_normalize_design_stylesheet_entries( $entries ): array {
+	if ( ! is_array( $entries ) ) {
+		return array();
+	}
+
+	$normalized = array();
+	$seen       = array();
+	foreach ( $entries as $index => $entry ) {
+		if ( ! is_array( $entry ) ) {
+			continue;
+		}
+
+		$css = trim( (string) ( $entry['css'] ?? '' ) );
+		if ( '' === $css ) {
+			continue;
+		}
+
+		$key = hash( 'sha256', $css );
+		if ( isset( $seen[ $key ] ) ) {
+			continue;
+		}
+
+		$source = trim( (string) ( $entry['source'] ?? '' ) );
+		if ( '' === $source ) {
+			$source = sprintf( 'design-stylesheet-%d', (int) $index + 1 );
+		}
+		$source = substr( (string) preg_replace( '/[^A-Za-z0-9_.:\/-]+/', '-', $source ), 0, 160 );
+
+		$seen[ $key ] = true;
+		$normalized[] = array(
+			'source' => $source,
+			'css'    => $css,
+		);
+	}
+
+	return $normalized;
+}
+
+/**
+ * Build provider-neutral design context for one block document.
+ *
+ * Design providers can append external stylesheet entries through the
+ * `mcp_block_editor_design_context` filter. Embedded styles remain owned by
+ * the block document and cannot be removed by an Adapter.
+ *
+ * @param string                          $content Raw Gutenberg content.
+ * @param array<int,array<string,mixed>> $blocks Normalized block tree.
+ * @param array<int,array<string,string>> $embedded_stylesheets Embedded stylesheet entries.
+ * @return array{stylesheets:array<int,array{source:string,css:string}>,external_stylesheet_count:int}
+ */
+function mcp_abilities_gutenberg_collect_design_context( string $content, array $blocks, array $embedded_stylesheets = array() ): array {
+	$external_context = apply_filters(
+		'mcp_block_editor_design_context',
+		array( 'stylesheets' => array() ),
+		array(
+			'content' => $content,
+			'blocks'  => $blocks,
+		)
+	);
+
+	$external_stylesheets = is_array( $external_context )
+		? mcp_abilities_gutenberg_normalize_design_stylesheet_entries( $external_context['stylesheets'] ?? array() )
+		: array();
+	$stylesheets = mcp_abilities_gutenberg_normalize_design_stylesheet_entries(
+		array_merge(
+			mcp_abilities_gutenberg_normalize_design_stylesheet_entries( $embedded_stylesheets ),
+			$external_stylesheets
+		)
+	);
+
+	return array(
+		'stylesheets'              => $stylesheets,
+		'external_stylesheet_count' => count( $external_stylesheets ),
+	);
+}
+
+/**
+ * Parse CSS declarations into a normalized property map.
+ *
+ * @param string $declarations CSS declaration block.
+ * @return array<string,string>
+ */
+function mcp_abilities_gutenberg_parse_css_declaration_map( string $declarations ): array {
+	$properties = array();
+	if ( ! preg_match_all( '/(?:^|;)\s*([A-Za-z][A-Za-z0-9-]*)\s*:\s*([^;]+)\s*(?=;|$)/', $declarations, $matches, PREG_SET_ORDER ) ) {
+		return $properties;
+	}
+
+	foreach ( $matches as $match ) {
+		$property = strtolower( trim( (string) ( $match[1] ?? '' ) ) );
+		$value    = strtolower( trim( preg_replace( '/\s*!important\s*$/i', '', (string) ( $match[2] ?? '' ) ) ) );
+		$value    = trim( (string) preg_replace( '/\s+/', ' ', $value ) );
+		if ( '' !== $property && '' !== $value ) {
+			$properties[ $property ] = $value;
+		}
+	}
+
+	return $properties;
+}
+
+/**
+ * Return class tokens from a simple selector that addresses one element.
+ *
+ * Complex selectors are intentionally ignored because a static block tree
+ * cannot prove their ancestor, state, or pseudo-element conditions.
+ *
+ * @param string $selector CSS selector.
+ * @return string[]
+ */
+function mcp_abilities_gutenberg_simple_selector_class_tokens( string $selector ): array {
+	$selector = trim( $selector );
+	if (
+		'' === $selector
+		|| false !== strpbrk( $selector, " \t\r\n>+~#[:" )
+		|| 1 !== preg_match( '/^(?:[A-Za-z][A-Za-z0-9-]*)?((?:\.[A-Za-z_][A-Za-z0-9_-]*)+)$/', $selector, $matches )
+	) {
+		return array();
+	}
+
+	if ( ! preg_match_all( '/\.([A-Za-z_][A-Za-z0-9_-]*)/', (string) $matches[1], $class_matches ) ) {
+		return array();
+	}
+
+	return array_values( array_unique( array_map( 'sanitize_html_class', $class_matches[1] ) ) );
+}
+
+/**
+ * Return whether a CSS property contributes to a contained surface.
+ *
+ * @param string $property CSS property.
+ */
+function mcp_abilities_gutenberg_is_containment_property( string $property ): bool {
+	return 1 === preg_match(
+		'/^(?:background(?:-color|-image)?|box-shadow|border(?:-(?:top|right|bottom|left))?(?:-(?:width|style|color|left-radius|right-radius))?|border-radius|border-(?:top|bottom)-(?:left|right)-radius|padding(?:-(?:top|right|bottom|left))?)$/',
+		$property
+	);
+}
+
+/**
+ * Return whether a containment declaration map paints a visible surface.
+ *
+ * @param array<string,string> $properties CSS properties.
+ */
+function mcp_abilities_gutenberg_has_visible_containment_surface( array $properties ): bool {
+	foreach ( $properties as $property => $value ) {
+		$property = strtolower( (string) $property );
+		$value    = strtolower( trim( (string) $value ) );
+		if ( '' === $value ) {
+			continue;
+		}
+
+		if ( 0 === strpos( $property, 'background' ) && ! preg_match( '/^(?:none|transparent|inherit|initial|unset)$/', $value ) ) {
+			return true;
+		}
+		if ( 'box-shadow' === $property && ! preg_match( '/^(?:none|inherit|initial|unset)$/', $value ) ) {
+			return true;
+		}
+		if (
+			0 === strpos( $property, 'border' )
+			&& false === strpos( $property, 'radius' )
+			&& false === strpos( $property, 'color' )
+			&& false === strpos( $property, 'style' )
+			&& ! preg_match( '/^(?:0(?:[a-z%]+)?|none|transparent|inherit|initial|unset)$/', $value )
+		) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Build the actual containment treatment applied to one block root.
+ *
+ * @param array<string,mixed>               $block Normalized block.
+ * @param array<int,array{source:string,css:string}> $stylesheets Design-context stylesheets.
+ * @return array{signature:string,properties:array<string,string>,sources:string[]}|null
+ */
+function mcp_abilities_gutenberg_block_containment_treatment( array $block, array $stylesheets ): ?array {
+	$block_classes = mcp_abilities_gutenberg_block_class_tokens( $block );
+	$properties    = array();
+	$sources       = array();
+
+	foreach ( $stylesheets as $stylesheet ) {
+		$css    = is_array( $stylesheet ) ? (string) ( $stylesheet['css'] ?? '' ) : '';
+		$source = is_array( $stylesheet ) ? (string) ( $stylesheet['source'] ?? 'design-context' ) : 'design-context';
+		if ( '' === trim( $css ) || ! preg_match_all( '/([^{}]+)\{([^{}]+)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+			continue;
+		}
+
+		foreach ( $rules as $rule ) {
+			$declaration_map = mcp_abilities_gutenberg_parse_css_declaration_map( (string) ( $rule[2] ?? '' ) );
+			if ( empty( $declaration_map ) ) {
+				continue;
+			}
+
+			foreach ( array_map( 'trim', explode( ',', (string) ( $rule[1] ?? '' ) ) ) as $selector ) {
+				$selector_classes = mcp_abilities_gutenberg_simple_selector_class_tokens( $selector );
+				if ( empty( $selector_classes ) || array_diff( $selector_classes, $block_classes ) ) {
+					continue;
+				}
+
+				$matched = false;
+				foreach ( $declaration_map as $property => $value ) {
+					if ( mcp_abilities_gutenberg_is_containment_property( $property ) ) {
+						$properties[ $property ] = $value;
+						$matched = true;
+					}
+				}
+				if ( $matched ) {
+					$sources[] = $source;
+				}
+			}
+		}
+	}
+
+	$inner_html = isset( $block['inner_html'] ) ? (string) $block['inner_html'] : '';
+	if ( preg_match( '/^\s*<[a-z][a-z0-9-]*\b[^>]*\bstyle=[\'\"]([^\'\"]*)[\'\"]/i', $inner_html, $matches ) ) {
+		foreach ( mcp_abilities_gutenberg_parse_css_declaration_map( (string) $matches[1] ) as $property => $value ) {
+			if ( mcp_abilities_gutenberg_is_containment_property( $property ) ) {
+				$properties[ $property ] = $value;
+				$sources[] = 'block-inline-style';
+			}
+		}
+	}
+
+	if ( ! mcp_abilities_gutenberg_has_visible_containment_surface( $properties ) ) {
+		return null;
+	}
+
+	ksort( $properties );
+	return array(
+		'signature'  => hash( 'sha256', wp_json_encode( $properties ) ),
+		'properties' => $properties,
+		'sources'    => array_values( array_unique( array_filter( array_map( 'strval', $sources ) ) ) ),
+	);
+}
+
+/**
+ * Find section leads that are visually reduced to peer-item cards.
+ *
+ * A high-confidence issue needs one direct sibling with an H2, at least two
+ * direct siblings with H3 headings, and the same visible containment treatment
+ * on the lead and repeated items. No provider names or class-name meanings are
+ * used.
+ *
+ * @param array<int,array<string,mixed>>              $blocks Normalized block tree.
+ * @param array<int,array{source:string,css:string}> $stylesheets Design-context stylesheets.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_section_lead_peer_treatment_issues( array $blocks, array $stylesheets ): array {
+	$issues = array();
+	$walk   = static function ( array $nodes, array $parent_path ) use ( &$walk, &$issues, $stylesheets ): void {
+		foreach ( $nodes as $node_index => $node ) {
+			if ( ! is_array( $node ) ) {
+				continue;
+			}
+
+			$node_path = array_merge( $parent_path, array( (int) $node_index ) );
+			$children  = isset( $node['inner_blocks'] ) && is_array( $node['inner_blocks'] ) ? $node['inner_blocks'] : array();
+			if ( count( $children ) >= 3 ) {
+				$lead_candidates = array();
+				$peer_candidates = array();
+				foreach ( $children as $child_index => $child ) {
+					if ( ! is_array( $child ) ) {
+						continue;
+					}
+
+					$outline = mcp_abilities_gutenberg_collect_outline( array( $child ) );
+					$levels  = array_values( array_unique( array_map( 'intval', wp_list_pluck( $outline, 'level' ) ) ) );
+					if ( in_array( 2, $levels, true ) && ! in_array( 3, $levels, true ) ) {
+						$lead_candidates[ (int) $child_index ] = $outline;
+					} elseif ( in_array( 3, $levels, true ) && ! in_array( 2, $levels, true ) ) {
+						$peer_candidates[ (int) $child_index ] = $outline;
+					}
+				}
+
+				if ( 1 === count( $lead_candidates ) && count( $peer_candidates ) >= 2 ) {
+					$lead_index     = (int) array_key_first( $lead_candidates );
+					$lead_treatment = mcp_abilities_gutenberg_block_containment_treatment( $children[ $lead_index ], $stylesheets );
+					if ( is_array( $lead_treatment ) ) {
+						$matching_peers = array();
+						$style_sources  = $lead_treatment['sources'];
+						foreach ( array_keys( $peer_candidates ) as $peer_index ) {
+							$peer_treatment = mcp_abilities_gutenberg_block_containment_treatment( $children[ $peer_index ], $stylesheets );
+							if ( is_array( $peer_treatment ) && $lead_treatment['signature'] === $peer_treatment['signature'] ) {
+								$matching_peers[] = array_merge( $node_path, array( (int) $peer_index ) );
+								$style_sources = array_merge( $style_sources, $peer_treatment['sources'] );
+							}
+						}
+
+						if ( count( $matching_peers ) >= 2 ) {
+							$issues[] = array(
+								'type'                 => 'section_lead_peer_treatment_risk',
+								'severity'             => 'warning',
+								'source'               => 'block-structure-and-design-context',
+								'container_path'       => $node_path,
+								'lead_path'            => array_merge( $node_path, array( $lead_index ) ),
+								'matching_peer_paths'  => $matching_peers,
+								'treatment_properties' => array_keys( $lead_treatment['properties'] ),
+								'style_sources'        => array_values( array_unique( array_filter( array_map( 'strval', $style_sources ) ) ) ),
+								'message'              => 'A section lead uses the same contained surface as its repeated item siblings. The section heading and introduction should establish hierarchy instead of reading as one more peer card.',
+							);
+						}
+					}
+				}
+			}
+
+			if ( $children ) {
+				$walk( $children, $node_path );
+			}
+		}
+	};
+
+	$walk( $blocks, array() );
+	return $issues;
 }
 
 /**
@@ -4531,6 +4856,22 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 		);
 	}
 
+	$design_context = mcp_abilities_gutenberg_collect_design_context(
+		$content,
+		is_array( $analysis['blocks'] ?? null ) ? $analysis['blocks'] : array(),
+		array_values( $embedded_css_entries )
+	);
+	$design_stylesheets = is_array( $design_context['stylesheets'] ?? null ) ? $design_context['stylesheets'] : array();
+	$issues = array_merge(
+		$issues,
+		mcp_abilities_gutenberg_collect_section_lead_peer_treatment_issues(
+			is_array( $analysis['blocks'] ?? null ) ? $analysis['blocks'] : array(),
+			$design_stylesheets
+		)
+	);
+	$signals['design_stylesheet_count'] = count( $design_stylesheets );
+	$signals['external_design_stylesheet_count'] = (int) ( $design_context['external_stylesheet_count'] ?? 0 );
+
 	$signals['text_measures'] = array_values( array_unique( array_filter( array_map( 'strval', wp_list_pluck( $text_measures, 'value' ) ) ) ) );
 	$signals['nested_container_measures'] = array_values( array_unique( array_filter( array_map( 'strval', wp_list_pluck( $nested_container_measures, 'value' ) ) ) ) );
 
@@ -4565,6 +4906,8 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 			$blocking_issue_types[] = $type;
 		}
 		if ( 'section_width_inconsistency_risk' === $type ) {
+			$score -= 18;
+		} elseif ( 'section_lead_peer_treatment_risk' === $type ) {
 			$score -= 18;
 		} elseif ( 'internal_measure_mismatch' === $type ) {
 			$score -= 14;
@@ -4608,6 +4951,9 @@ function mcp_abilities_gutenberg_evaluate_design( string $content ): array {
 	$recommendations = array();
 	if ( in_array( 'section_width_inconsistency_risk', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'Use one primary interior content width for intro panels, cards, quotes, reusable rows, and CTA sections. Reserve full bleed for heroes, strips, or deliberate breakouts.';
+	}
+	if ( in_array( 'section_lead_peer_treatment_risk', $signals['issue_types'], true ) ) {
+		$recommendations[] = 'Separate the section heading and introduction from repeated item cards. Keep the lead open or give it a clearly different feature treatment so the reading order is immediate.';
 	}
 	if ( in_array( 'internal_measure_mismatch', $signals['issue_types'], true ) ) {
 		$recommendations[] = 'When a section shares the page width, do not quietly cap the quote, text lane, or nested columns row inside it to a much narrower measure unless that asymmetry is very clearly intentional.';
@@ -4704,6 +5050,17 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 					'Pick one main interior content width and reuse it across intro panels, card rows, quotes, reusable rows, and CTA sections.',
 					'Keep only heroes, strips, or intentional feature sections full bleed.',
 					'If one section needs to feel narrower, make that contrast obvious and deliberate rather than accidental.',
+				),
+			);
+		} elseif ( 'section_lead_peer_treatment_risk' === $type ) {
+			$suggestions[] = array(
+				'type'      => $type,
+				'selectors' => array(),
+				'problem'   => 'The section heading and introduction use the same contained surface as the repeated items, so the lead reads like another card.',
+				'fixes'     => array(
+					'Keep the section lead open above the repeated item row.',
+					'If the lead must be contained, give it a clearly different visual treatment from the repeated items.',
+					'Preserve the H2-to-H3 hierarchy in both the block tree and the visible treatment.',
 				),
 			);
 		} elseif ( 'internal_measure_mismatch' === $type ) {
