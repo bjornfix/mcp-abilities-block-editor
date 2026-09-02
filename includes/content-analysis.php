@@ -5325,6 +5325,27 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 }
 
 /**
+ * Convert rendered HTML into readable plain text without joining adjacent
+ * block-level text nodes. The copy evaluator measures sentence length, so
+ * removing tags without first preserving their boundaries turns a heading
+ * followed by a short paragraph into one false long sentence.
+ *
+ * @param string $html Rendered or saved HTML.
+ * @return string
+ */
+function mcp_abilities_gutenberg_copy_plain_text( string $html ): string {
+	$with_boundaries = preg_replace(
+		'/<!--.*?-->|<br\s*\/?>|<\/(?:address|article|blockquote|caption|dd|div|dl|dt|figcaption|figure|h[1-6]|li|ol|p|pre|section|table|td|th|tr|ul)\s*>/isu',
+		"\n",
+		$html
+	);
+	$with_boundaries = is_string( $with_boundaries ) ? $with_boundaries : $html;
+	$without_tags    = wp_strip_all_tags( $with_boundaries );
+
+	return trim( (string) preg_replace( '/\s+/u', ' ', $without_tags ) );
+}
+
+/**
  * Evaluate Gutenberg copy quality with lightweight editorial heuristics.
  *
  * @param string $content Raw content.
@@ -5333,7 +5354,7 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 function mcp_abilities_gutenberg_evaluate_copy( string $content ): array {
 	$analysis    = mcp_abilities_gutenberg_analyze_content( $content );
 	$blocks      = is_array( $analysis['blocks'] ?? null ) ? $analysis['blocks'] : array();
-	$plain_text  = trim( wp_strip_all_tags( $content ) );
+	$plain_text  = mcp_abilities_gutenberg_copy_plain_text( $content );
 	$issues      = array();
 	$metrics     = array(
 		'paragraphs'          => 0,

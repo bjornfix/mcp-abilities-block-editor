@@ -8,7 +8,7 @@ WordPress block-editor abilities for MCP. Parse, validate, inspect, generate, an
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.1
-**Stable tag:** 0.20.26
+**Stable tag:** 0.20.29
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -252,6 +252,18 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - `gutenberg/evaluate-render-context` inspects the rendered page wrapper around `.entry-content` or `.page-content` so wrapper-induced problems can be surfaced even when the block markup itself is valid.
 
 ## Changelog
+
+### 0.20.29
+
+- Preserve boundaries between adjacent block-level elements during copy evaluation so sentence-length checks do not report false positives.
+
+### 0.20.28
+
+- Avoid false positives for valid quoted HTML attributes while keeping the malformed translated-markup guard at the Gutenberg write boundary.
+
+### 0.20.27
+
+- Block malformed translated HTML at the canonical Gutenberg validity and write Interface before it can be persisted.
 
 ### 0.20.26
 - Adds a provider-neutral design-context filter for external stylesheets.

@@ -583,6 +583,95 @@ function mcp_abilities_gutenberg_collect_syntax_issues( string $content ): array
 }
 
 /**
+ * Collect high-confidence malformed HTML patterns that browsers may repair silently.
+ *
+ * Gutenberg block comments can remain valid while a translation or other text
+ * mutation damages the HTML emitted inside a block.  Keep this guard focused on
+ * the concrete corruption patterns seen in GenerateBlocks text markup instead of
+ * trying to replace WordPress' HTML parser.
+ *
+ * @param string $content Raw Gutenberg content.
+ * @return array<int,array<string,mixed>>
+ */
+function mcp_abilities_gutenberg_collect_markup_issues( string $content ): array {
+	$issues    = array();
+	$tag_names = 'p|h[1-6]|a|div|li|span';
+
+	/* A tag name accidentally serialized as an attribute (for example p=""). */
+	$opening_pattern = '/<(?P<tag>' . $tag_names . ')\b(?P<attributes>(?:"[^"]*"|\'[^\']*\'|[^>"\'])*?)>/is';
+	if ( preg_match_all( $opening_pattern, $content, $matches, PREG_OFFSET_CAPTURE ) ) {
+		foreach ( $matches['tag'] as $index => $tag_match ) {
+			$tag        = strtolower( (string) $tag_match[0] );
+			$attributes = (string) ( $matches['attributes'][ $index ][0] ?? '' );
+			$offset     = (int) $tag_match[1];
+
+			$unquoted_attributes = preg_replace( '/"[^"]*"|\'[^\']*\'/s', ' ', $attributes );
+			if ( false === $unquoted_attributes ) {
+				$unquoted_attributes = $attributes;
+			}
+			$tag_name_attribute = (bool) preg_match( '/(?:^|\s)' . preg_quote( $tag, '/' ) . '\s*=/i', $unquoted_attributes );
+			if ( $tag_name_attribute ) {
+				$issues[] = array(
+					'code'    => 'tag_name_used_as_attribute',
+					'offset'  => $offset,
+					'tag'     => $tag,
+					'message' => sprintf( 'HTML tag <%s> contains an attribute named <%s>; the block markup is malformed.', $tag, $tag ),
+				);
+			}
+
+			/* Missing whitespace after a quoted attribute joins translated text to the next attribute. */
+			$quote = '';
+			$attribute_separator_missing = false;
+			$attribute_length = strlen( $attributes );
+			for ( $attribute_index = 0; $attribute_index < $attribute_length; $attribute_index++ ) {
+				$character = $attributes[ $attribute_index ];
+				if ( '' === $quote && ( '"' === $character || "'" === $character ) ) {
+					$quote = $character;
+					continue;
+				}
+				if ( '' !== $quote && $quote === $character ) {
+					$quote = '';
+					$next_character = $attributes[ $attribute_index + 1 ] ?? '';
+					if ( '' !== $next_character && preg_match( '/[A-Za-z]/', $next_character ) ) {
+						$attribute_separator_missing = true;
+						break;
+					}
+				}
+			}
+			if ( $attribute_separator_missing && ! $tag_name_attribute ) {
+				$issues[] = array(
+					'code'    => 'attribute_separator_missing',
+					'offset'  => $offset,
+					'tag'     => $tag,
+					'message' => sprintf( 'HTML tag <%s> contains adjacent attribute text without a separator; the block markup is malformed.', $tag ),
+				);
+			}
+		}
+	}
+
+	/* A closing tag delimiter was dropped, leaving text such as "label/p>". */
+	$closing_pattern = '/<(?P<open>' . $tag_names . ')\b[^>]*>[^<]{0,500}\/(?P<close>' . $tag_names . ')\s*>/is';
+	if ( preg_match_all( $closing_pattern, $content, $matches, PREG_OFFSET_CAPTURE ) ) {
+		foreach ( $matches['open'] as $index => $open_match ) {
+			$open  = strtolower( (string) $open_match[0] );
+			$close = strtolower( (string) ( $matches['close'][ $index ][0] ?? '' ) );
+			if ( $open !== $close ) {
+				continue;
+			}
+
+			$issues[] = array(
+				'code'    => 'closing_tag_delimiter_missing',
+				'offset'  => (int) $open_match[1],
+				'tag'     => $open,
+				'message' => sprintf( 'HTML tag <%s> has a closing tag without its opening delimiter; the block markup is malformed.', $open ),
+			);
+		}
+	}
+
+	return $issues;
+}
+
+/**
  * Require valid Gutenberg block syntax and explain concrete failures.
  *
  * @param string $content Raw or prepared Gutenberg content.
@@ -590,6 +679,7 @@ function mcp_abilities_gutenberg_collect_syntax_issues( string $content ): array
  */
 function mcp_abilities_gutenberg_assert_valid_gutenberg_content( string $content ) {
 	$issues = mcp_abilities_gutenberg_collect_syntax_issues( $content );
+	$issues = array_merge( $issues, mcp_abilities_gutenberg_collect_markup_issues( $content ) );
 	if ( empty( $issues ) ) {
 		return true;
 	}

@@ -510,7 +510,10 @@ function mcp_abilities_gutenberg_validate_content( string $content ): array {
 	$normalized          = mcp_abilities_gutenberg_normalize_blocks( $parsed_blocks );
 	$roundtrip_content   = serialize_blocks( $parsed_blocks );
 	$roundtrip_normalized = mcp_abilities_gutenberg_normalize_blocks( parse_blocks( $roundtrip_content ) );
-	$syntax_issues       = mcp_abilities_gutenberg_collect_syntax_issues( $content );
+	$syntax_issues       = array_merge(
+		mcp_abilities_gutenberg_collect_syntax_issues( $content ),
+		mcp_abilities_gutenberg_collect_markup_issues( $content )
+	);
 
 	$top_level_names = array();
 	foreach ( $normalized as $block ) {
