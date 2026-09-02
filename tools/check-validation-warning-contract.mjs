@@ -32,5 +32,7 @@ assert.match(generation, /'static_attr_changes_require_markup_regeneration'\s*=>
   'structured static-markup mutation guidance must remain available');
 assert.match(analysis, /'visual_review_required'\s*=>\s*true/,
   'static design evaluation must declare that rendered visual review is still required');
+assert.match(analysis, /\$technical_caps\s*=\s*array/,
+  'copy evaluation must distinguish standard technical acronyms from shouty copy');
 
 console.log('Validation warning contract: OK');

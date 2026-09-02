@@ -5375,8 +5375,9 @@ function mcp_abilities_gutenberg_evaluate_copy( string $content ): array {
 
 	$generic_heading_text = array( 'welcome', 'introduction', 'overview', 'section', 'about', 'title' );
 	$generic_cta_text     = array( 'learn more', 'read more', 'click here', 'submit', 'more', 'get started' );
+	$technical_caps       = array( 'API', 'CSS', 'CRM', 'DNS', 'HSTS', 'HTML', 'HTTPS', 'HTTP', 'IDX', 'JSON', 'MLS', 'PDF', 'PHP', 'SEO', 'SERP', 'SSL', 'TLS', 'URL', 'URLs', 'XML' );
 
-	$walker = static function ( array $nodes ) use ( &$walker, &$issues, &$metrics, $generic_heading_text, $generic_cta_text ): void {
+	$walker = static function ( array $nodes ) use ( &$walker, &$issues, &$metrics, $generic_heading_text, $generic_cta_text, $technical_caps ): void {
 		foreach ( $nodes as $node ) {
 			$name  = isset( $node['block_name'] ) ? (string) $node['block_name'] : '';
 			$attrs = isset( $node['attrs'] ) && is_array( $node['attrs'] ) ? $node['attrs'] : array();
@@ -5421,8 +5422,16 @@ function mcp_abilities_gutenberg_evaluate_copy( string $content ): array {
 			}
 
 			if ( preg_match_all( '/\b[A-Z]{4,}\b/u', $text, $caps_matches ) ) {
-				$metrics['all_caps_fragments'] += count( $caps_matches[0] );
-				if ( count( $caps_matches[0] ) >= 2 ) {
+				$caps_fragments = array_values(
+					array_filter(
+						$caps_matches[0],
+						static function ( string $fragment ) use ( $technical_caps ): bool {
+							return ! in_array( $fragment, $technical_caps, true );
+						}
+					)
+				);
+				$metrics['all_caps_fragments'] += count( $caps_fragments );
+				if ( count( $caps_fragments ) >= 2 ) {
 					$issues[] = array(
 						'severity' => 'notice',
 						'code'     => 'all_caps_copy',
