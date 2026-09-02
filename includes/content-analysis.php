@@ -5380,7 +5380,7 @@ function mcp_abilities_gutenberg_evaluate_copy( string $content ): array {
 
 	$generic_heading_text = array( 'welcome', 'introduction', 'overview', 'section', 'about', 'title' );
 	$generic_cta_text     = array( 'learn more', 'read more', 'click here', 'submit', 'more', 'get started' );
-	$technical_caps       = array( 'API', 'CSS', 'CRM', 'DNS', 'ERISA', 'HSTS', 'HTML', 'HTTPS', 'HTTP', 'IDX', 'JSON', 'MLS', 'PDF', 'PHP', 'SEO', 'SERP', 'SSL', 'TLS', 'URL', 'URLs', 'XML' );
+	$technical_caps       = array( 'ADSL', 'API', 'CSS', 'CRM', 'DNS', 'EMDR', 'ERISA', 'FINRA', 'HSTS', 'HTML', 'HTTPS', 'HTTP', 'IDX', 'IFTTT', 'JSON', 'LGBTQ', 'MLS', 'PDF', 'PHP', 'SEO', 'SERP', 'SSL', 'TLS', 'URL', 'URLs', 'WPML', 'XML', 'YMYL' );
 
 	$walker = static function ( array $nodes ) use ( &$walker, &$issues, &$metrics, $generic_heading_text, $generic_cta_text, $technical_caps ): void {
 		foreach ( $nodes as $node ) {
