@@ -4,7 +4,7 @@ Tags: mcp, gutenberg, block-editor, blocks, automation
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.20.32
+Stable tag: 0.20.33
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -146,6 +146,10 @@ Download the stable plugin ZIP from https://downloads.devenia.com/mcp-abilities-
 4. Discover the new `gutenberg/*` abilities through your MCP client.
 
 == Changelog ==
+
+= 0.20.33 =
+
+* Ignore the standard ERISA acronym in the shouty-copy check.
 
 = 0.20.32 =
 
