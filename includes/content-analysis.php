@@ -5335,12 +5335,19 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
  */
 function mcp_abilities_gutenberg_copy_plain_text( string $html ): string {
 	$with_boundaries = preg_replace(
-		'/<!--.*?-->|<br\s*\/?>|<\/(?:address|article|blockquote|caption|dd|div|dl|dt|figcaption|figure|h[1-6]|li|ol|p|pre|section|table|td|th|tr|ul)\s*>/isu',
+		'/<!--.*?-->|<br\s*\/?>|<\/(?:address|article|blockquote|caption|dd|div|dl|dt|figcaption|figure|li|ol|p|pre|section|table|td|th|tr|ul)\s*>/isu',
 		"\n",
 		$html
 	);
 	$with_boundaries = is_string( $with_boundaries ) ? $with_boundaries : $html;
+	$with_boundaries = preg_replace( '/<\/h[1-6]\s*>/isu', '__MCP_HEADING_END__', $with_boundaries );
+	$with_boundaries = is_string( $with_boundaries ) ? $with_boundaries : $html;
 	$without_tags    = wp_strip_all_tags( $with_boundaries );
+	$without_tags    = preg_replace( '/(?<![.!?])__MCP_HEADING_END__/u', ".\n", $without_tags );
+	$without_tags    = is_string( $without_tags ) ? $without_tags : '';
+	$without_tags    = preg_replace( '/(?<=[.!?])__MCP_HEADING_END__/u', "\n", $without_tags );
+	$without_tags    = is_string( $without_tags ) ? $without_tags : '';
+	$without_tags    = str_replace( '__MCP_HEADING_END__', "\n", $without_tags );
 
 	return trim( (string) preg_replace( '/\s+/u', ' ', $without_tags ) );
 }

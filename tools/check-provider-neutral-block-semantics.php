@@ -73,6 +73,6 @@ $assert( 1 === count( $media ), 'Provider media was not collected exactly once.'
 $assert( '/image.webp' === $media[0]['url'] && 'Useful image' === $media[0]['alt'], 'Provider media semantics were changed.' );
 
 $copy_text = mcp_abilities_gutenberg_copy_plain_text( '<h2>Section heading</h2><p>A short paragraph follows.</p>' );
-$assert( 'Section heading A short paragraph follows.' === $copy_text, 'Copy plain text projection joined adjacent block text.' );
+$assert( 'Section heading. A short paragraph follows.' === $copy_text, 'Copy plain text projection joined adjacent block text.' );
 
 echo "Provider-neutral block semantic checks passed.\n";
