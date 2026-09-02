@@ -75,4 +75,7 @@ $assert( '/image.webp' === $media[0]['url'] && 'Useful image' === $media[0]['alt
 $copy_text = mcp_abilities_gutenberg_copy_plain_text( '<h2>Section heading</h2><p>A short paragraph follows.</p>' );
 $assert( 'Section heading. A short paragraph follows.' === $copy_text, 'Copy plain text projection joined adjacent block text.' );
 
+$list_copy = mcp_abilities_gutenberg_copy_plain_text( '<h3>Consider help when</h3><ul><li>The result is highly visible and harming trust now;</li><li>the source is complex, hostile, or legally sensitive;</li><li>you need a sustained search campaign.</li></ul>' );
+$assert( false !== strpos( $list_copy, 'trust now. the source' ) && false !== strpos( $list_copy, 'sensitive. you need' ), 'Copy plain text projection joined list-item boundaries.' );
+
 echo "Provider-neutral block semantic checks passed.\n";

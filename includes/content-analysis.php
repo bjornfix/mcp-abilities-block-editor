@@ -5336,7 +5336,7 @@ function mcp_abilities_gutenberg_suggest_design_fixes( string $content ): array 
 function mcp_abilities_gutenberg_copy_plain_text( string $html ): string {
 	$with_boundaries = preg_replace(
 		'/<!--.*?-->|<br\s*\/?>|<\/(?:address|article|blockquote|caption|dd|div|dl|dt|figcaption|figure|li|ol|p|pre|section|table|td|th|tr|ul)\s*>/isu',
-		"\n",
+		'__MCP_BLOCK_END__',
 		$html
 	);
 	$with_boundaries = is_string( $with_boundaries ) ? $with_boundaries : $html;
@@ -5348,6 +5348,11 @@ function mcp_abilities_gutenberg_copy_plain_text( string $html ): string {
 	$without_tags    = preg_replace( '/(?<=[.!?])__MCP_HEADING_END__/u', "\n", $without_tags );
 	$without_tags    = is_string( $without_tags ) ? $without_tags : '';
 	$without_tags    = str_replace( '__MCP_HEADING_END__', "\n", $without_tags );
+	$without_tags    = str_replace( '__MCP_BLOCK_END__', "\n", $without_tags );
+	$without_tags    = preg_replace( '/;\n(?=\S)/u', ".\n", $without_tags );
+	$without_tags    = is_string( $without_tags ) ? $without_tags : '';
+	$without_tags    = preg_replace( '/(?<![.!?])\n(?=\S)/u', ".\n", $without_tags );
+	$without_tags    = is_string( $without_tags ) ? $without_tags : '';
 
 	return trim( (string) preg_replace( '/\s+/u', ' ', $without_tags ) );
 }
