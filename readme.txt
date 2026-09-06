@@ -194,10 +194,10 @@ Download the stable plugin ZIP from https://downloads.devenia.com/mcp-abilities-
 * Recognizes semantic headings from registered blocks during content validation and keeps static-markup mutation guidance in the structured guardrail field instead of emitting a page warning.
 
 = 0.20.22 =
-* Fixed FAQ schema detection for nested Rank Math FAQ blocks inside Gutenberg container layouts.
+* Improved FAQ schema detection inside nested Gutenberg container layouts.
 
 = 0.20.21 =
-* Refined Gutenberg design evaluation so Rank Math FAQ blocks are recognized as schema-backed FAQ content and normal three-card support rows are not blocked as cramped when their copy load is moderate.
+* Refined Gutenberg design evaluation for FAQ content and normal three-card support rows with moderate copy.
 
 = 0.20.20 =
 * Routes source-design update preflight through a registered site-policy filter so the site adapter owns its contract.

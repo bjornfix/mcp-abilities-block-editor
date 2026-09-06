@@ -13,6 +13,10 @@ function sanitize_html_class( string $value ): string {
 	return preg_replace( '/[^A-Za-z0-9_-]/', '', $value ) ?? '';
 }
 
+function wp_list_pluck( array $items, string $field ): array {
+	return array_column( $items, $field );
+}
+
 require_once dirname( __DIR__ ) . '/includes/content-analysis.php';
 
 $assert = static function ( bool $condition, string $message ): void {
@@ -77,5 +81,13 @@ $assert( 'Section heading. A short paragraph follows.' === $copy_text, 'Copy pla
 
 $list_copy = mcp_abilities_gutenberg_copy_plain_text( '<h3>Consider help when</h3><ul><li>The result is highly visible and harming trust now;</li><li>the source is complex, hostile, or legally sensitive;</li><li>you need a sustained search campaign.</li></ul>' );
 $assert( false !== strpos( $list_copy, 'trust now. the source' ) && false !== strpos( $list_copy, 'sensitive. you need' ), 'Copy plain text projection joined list-item boundaries.' );
+
+$faq_content = '<!-- wp:fixture/faq {"questions":[{"title":"First?"},{"title":"Second?"}]} /-->';
+$faq_html = '<section><h2>First question?</h2><p>This answer has enough words for the FAQ check.</p></section><section><h2>Second question?</h2><p>This answer also has enough words for the FAQ check.</p></section>';
+$schema = '<script type="application/ld+json">{"@type":"FAQPage","mainEntity":[]}</script>';
+$assert( ! mcp_abilities_gutenberg_content_has_faq_schema( $faq_content ), 'Block names and question attributes must not imply emitted schema.' );
+$assert( 1 === count( mcp_abilities_gutenberg_collect_rendered_faq_schema_issues( $faq_content, $faq_html, 'fixture' ) ), 'Missing schema must be reported independently of the block provider.' );
+$assert( array() === mcp_abilities_gutenberg_collect_rendered_faq_schema_issues( $faq_content, $faq_html . $schema, 'fixture' ), 'Schema emitted in rendered HTML was ignored.' );
+$assert( array() === mcp_abilities_gutenberg_collect_rendered_faq_schema_issues( $faq_content . $schema, $faq_html, 'fixture' ), 'Schema in stored content was ignored.' );
 
 echo "Provider-neutral block semantic checks passed.\n";
