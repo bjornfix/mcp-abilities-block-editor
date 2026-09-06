@@ -587,7 +587,7 @@ function mcp_abilities_gutenberg_collect_syntax_issues( string $content ): array
  *
  * Gutenberg block comments can remain valid while a translation or other text
  * mutation damages the HTML emitted inside a block.  Keep this guard focused on
- * the concrete corruption patterns seen in GenerateBlocks text markup instead of
+ * the concrete corruption patterns seen in block text markup instead of
  * trying to replace WordPress' HTML parser.
  *
  * @param string $content Raw Gutenberg content.

@@ -43,17 +43,17 @@ function apply_filters( string $name, $value, ...$args ) {
 require_once dirname( __DIR__ ) . '/includes/core-blocks.php';
 require_once dirname( __DIR__ ) . '/includes/content-analysis.php';
 
-$valid_markup = mcp_abilities_gutenberg_assert_valid_gutenberg_content( '<!-- wp:generateblocks/text --><p class="gb-text">A valid paragraph.</p><!-- /wp:generateblocks/text -->' );
+$valid_markup = mcp_abilities_gutenberg_assert_valid_gutenberg_content( '<!-- wp:fixture/text --><p class="fixture-text">A valid paragraph.</p><!-- /wp:fixture/text -->' );
 if ( true !== $valid_markup ) {
-	throw new RuntimeException( 'Valid GenerateBlocks text markup was rejected.' );
+	throw new RuntimeException( 'Valid block text markup was rejected.' );
 }
 
-$valid_link = mcp_abilities_gutenberg_assert_valid_gutenberg_content( '<!-- wp:generateblocks/text --><a class="gb-text button" href="https://example.com/">A valid link</a><!-- /wp:generateblocks/text -->' );
+$valid_link = mcp_abilities_gutenberg_assert_valid_gutenberg_content( '<!-- wp:fixture/text --><a class="fixture-text button" href="https://example.com/">A valid link</a><!-- /wp:fixture/text -->' );
 if ( true !== $valid_link ) {
 	throw new RuntimeException( 'Valid quoted link attributes were rejected as malformed markup.' );
 }
 
-$malformed_markup = mcp_abilities_gutenberg_assert_valid_gutenberg_content( '<!-- wp:generateblocks/text --><p class="gb-text"Devenia-sider/p><!-- /wp:generateblocks/text -->' );
+$malformed_markup = mcp_abilities_gutenberg_assert_valid_gutenberg_content( '<!-- wp:fixture/text --><p class="fixture-text"Fixture text/p><!-- /wp:fixture/text -->' );
 if ( ! $malformed_markup instanceof WP_Error || false === strpos( $malformed_markup->message, 'malformed' ) ) {
 	throw new RuntimeException( 'Malformed translated text markup was not blocked at the Gutenberg write Interface.' );
 }

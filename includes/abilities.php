@@ -2335,7 +2335,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'allow_design_markup_loss' => array(
 						'type'        => 'boolean',
 						'default'     => false,
-						'description' => 'Allow upsert to replace an existing page even when GenerateBlocks/design markup would be removed. Defaults to false.',
+						'description' => 'Allow upsert to replace an existing page even when guarded design markup would be removed. Defaults to false.',
 					),
 					'content_write_mode' => array( 'type' => 'string', 'enum' => array( 'guarded', 'full_rebuild' ), 'default' => 'guarded' ),
 					'status' => array(
@@ -2612,7 +2612,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'allow_design_markup_loss' => array(
 						'type'        => 'boolean',
 						'default'     => false,
-						'description' => 'Allow upsert to replace an existing page even when GenerateBlocks/design markup would be removed. Defaults to false.',
+						'description' => 'Allow upsert to replace an existing page even when guarded design markup would be removed. Defaults to false.',
 					),
 					'content_write_mode' => array( 'type' => 'string', 'enum' => array( 'guarded', 'full_rebuild' ), 'default' => 'guarded' ),
 					'status' => array(
@@ -2778,7 +2778,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'allow_design_markup_loss' => array(
 						'type'        => 'boolean',
 						'default'     => false,
-						'description' => 'Allow replace mode to remove existing GenerateBlocks/design markup. Defaults to false.',
+						'description' => 'Allow replace mode to remove existing guarded design markup. Defaults to false.',
 					),
 					'content_write_mode' => array( 'type' => 'string', 'enum' => array( 'guarded', 'full_rebuild' ), 'default' => 'guarded' ),
 				),
@@ -3532,7 +3532,7 @@ function mcp_abilities_gutenberg_register_abilities(): void {
 					'allow_design_markup_loss' => array(
 						'type'        => 'boolean',
 						'default'     => false,
-						'description' => 'Allow replacing content even when existing GenerateBlocks/design markup would be removed. Defaults to false.',
+						'description' => 'Allow replacing content even when existing guarded design markup would be removed. Defaults to false.',
 					),
 					'content_write_mode' => array( 'type' => 'string', 'enum' => array( 'guarded', 'full_rebuild' ), 'default' => 'guarded' ),
 				),

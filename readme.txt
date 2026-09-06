@@ -184,14 +184,14 @@ Download the stable plugin ZIP from https://downloads.devenia.com/mcp-abilities-
 * Mark static design evaluation as insufficient for visual approval and require a rendered browser review.
 * Route new pages and every block-document mutation through the canonical neutral Content Write Gate.
 * Preserve exact caller operation identity and support the shared full_rebuild write mode.
-* Move GenerateBlocks marker ownership to the GeneratePress Adapter.
+* Move provider-specific marker ownership to the owning integration.
 
 = 0.20.24 =
 * Adds neutral site-policy seams for block-document write preflight and protected design markers.
 * Removes the site-specific editorial validator and ability; site policy belongs in the site's private adapter.
 
 = 0.20.23 =
-* Recognizes semantic GenerateBlocks headlines during content validation and keeps static-markup mutation guidance in the structured guardrail field instead of emitting a page warning.
+* Recognizes semantic headings from registered blocks during content validation and keeps static-markup mutation guidance in the structured guardrail field instead of emitting a page warning.
 
 = 0.20.22 =
 * Fixed FAQ schema detection for nested Rank Math FAQ blocks inside Gutenberg container layouts.
@@ -246,7 +246,7 @@ Download the stable plugin ZIP from https://downloads.devenia.com/mcp-abilities-
 
 = 0.20.9 =
 
-* Fixed: broad Gutenberg content replacement paths now block accidental removal of existing GenerateBlocks/design markup unless explicitly overridden.
+* Fixed: broad Gutenberg content replacement paths now block accidental removal of existing guarded design markup unless explicitly overridden.
 
 = 0.20.8 =
 

@@ -300,7 +300,7 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - Removes the site-specific editorial validator and ability from this public plugin; site policy now belongs in the site's private adapter.
 
 ### 0.20.23
-- Recognizes semantic GenerateBlocks headlines during content validation and keeps static-markup mutation guidance in the structured guardrail field instead of emitting a page warning.
+- Recognizes semantic headings from registered blocks during content validation and keeps static-markup mutation guidance in the structured guardrail field instead of emitting a page warning.
 
 ### 0.20.22
 - Fixed FAQ schema detection for nested Rank Math FAQ blocks inside Gutenberg container layouts.
@@ -351,7 +351,7 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 - Added editor-compatibility reporting to `gutenberg/validate-content` for issues PHP round-trips can miss
 
 ### 0.20.9
-- Fixed broad Gutenberg content replacement paths so they block accidental removal of existing GenerateBlocks/design markup unless explicitly overridden
+- Fixed broad Gutenberg content replacement paths so they block accidental removal of existing guarded design markup unless explicitly overridden
 
 ### 0.20.8
 - Fixed zero-parameter ability schemas so MCP Adapter 0.4.x clients do not receive invalid `properties: []` JSON

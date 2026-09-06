@@ -10,7 +10,7 @@ const coreBlocks = await readFile(new URL('../includes/core-blocks.php', import.
 assert.match(coreBlocks, /function mcp_abilities_gutenberg_collect_markup_issues\( string \$content \): array/,
   'the Block Editor Module must expose one owning Interface for malformed saved HTML');
 assert.match(coreBlocks, /closing_tag_delimiter_missing|attribute_separator_missing/,
-  'malformed GenerateBlocks text markup must have explicit stable issue codes');
+  'malformed block text markup must have explicit stable issue codes');
 assert.match(coreBlocks, /mcp_abilities_gutenberg_collect_markup_issues\( \$content \)/,
   'the canonical Gutenberg validity Interface must invoke the malformed-markup guard');
 assert.match(generation, /mcp_abilities_gutenberg_collect_markup_issues\( \$content \)/,
